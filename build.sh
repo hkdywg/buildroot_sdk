@@ -5,6 +5,9 @@ BUILD_PROJECT=
 BUILD_PROJECT_CONFIG=
 PROJECT_ARRAY=
 
+TOP_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")"  &> /dev/null && pwd)
+cd ${TOP_DIR}
+
 function print_info()
 {
 	printf "\e[1;32m%s\e[0m\n" "$1"
