@@ -1,2 +1,2 @@
-export KERNEL_ARCH=arm64
+export SDK_VERSION=64bit
 
