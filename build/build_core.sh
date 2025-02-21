@@ -37,7 +37,14 @@ function build_kernel()
 	make kernel || return $?
 }
 
-# 所以子项编译入口
+# rootfs 编译
+function build_rootfs()
+{
+	cd ${BUILD_PATH} || return
+	make rootfs || return $?
+}
+
+# 所有子项编译入口
 function build_all()
 {
 	# build bsp

@@ -28,9 +28,9 @@ endef
 ########################################################################
 # configure kernel defconfig
 ifeq ($(CONFIG_BUILD_FOR_DEBUG), y)
-KERNEL_COFNIG_NAME := ${BUILD_PROJECT}_debug_defconfig
+KERNEL_COFNIG_NAME := kernel_debug_defconfig
 else
-KERNEL_COFNIG_NAME := ${BUILD_PROJECT}_release_defconfig
+KERNEL_COFNIG_NAME := kernel_release_defconfig
 endif
 
 ${KERNEL_BUILD_PATH}:
@@ -47,9 +47,10 @@ define copy_ko_action
 	${Q}find ${1} -name '*.ko' -exec cp -f {} ${KERNEL_BUILD_PATH}/ko/ \;
 endef
 
-kernel%: export CROSS_COMPILE=${CROSS_COMPILE_64}
 kernel%: export INSTALL_MOD_PATH=${KERNEL_BUILD_PATH}/modules
 kernel%: export ARCH=${KERNEL_ARCH}
+
+$(warning ${KERNEL_ARCH})
 
 KERNEL_OUTPUT_CONFIG_PATH := ${KERNEL_BUILD_PATH}/.config
 KERNEL_DEFAULT_COFNIG_PATH := ${TOP_DIR}/device/${BUILD_PROJECT}/${KERNEL_COFNIG_NAME}
@@ -81,7 +82,25 @@ kernel: kernel-build
 	$(call copy_ko_action, ${INSTALL_MOD_PATH})
 
 
+########################################################################
+# rootfs targets
+########################################################################
 
+${ROOTFS_BUILD_PATH}:
+	${Q}mkdir -p $@
+
+
+br-rootfs-build:export TARGET_OUTPUT_DIR=${BR_ROOTFS_DIR}
+br-rootfs-build:export BR_DEFCONFIG=${BUILD_PROJECT}_br_defconfig
+br-rootfs-build:
+	$(call print_target)
+	${Q}$(MAKE) -C ${ROOTFS_PATH} ${BR_DEFCONFIG} BR2_TOOLCHAIN_EXTERNAL_PATH=${CROSS_COMPILE_PATH} O=${BR_BUILD_PATH}
+	${Q}${ROOTFS_PATH}/utils/brmake -j${COREN} -C ${ROOTFS_PATH} O=${BR_BUILD_PATH}
+
+rootfs-build: br-rootfs-build
+
+rootfs: rootfs-build
+	$(call print_target)
 
 
 
