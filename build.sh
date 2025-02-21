@@ -127,10 +127,22 @@ function project_build()
 	fi
 }
 
+function build_spec_subtarget()
+{
+	local target
+	local support_target=("uboot" "kernel" "rootfs")
+	for target in "${support_target[@]}";  do
+		if [ "$target" = "$1" ]; then		
+			prepare_env
+			build_$1 && exit $? 
+		fi
+	done
+}
+
 
 get_toolchain
 get_available_project
-if [  $# -eq 1 ]; then
+if [  $# -eq 1 -o $# -eq 2 ]; then
     if [ "$1" = "lunch" ]; then
     choose_project || exit 0
     else
@@ -145,7 +157,7 @@ if [  $# -eq 1 ]; then
         fi
     done
     if [ $found -eq 0 ]; then
-        print_err "input project is invalid, not support yet!"
+        print_error "input project is invalid, not support yet!"
         exit 1
     fi
     fi
@@ -153,5 +165,9 @@ else
     build_usage && exit 0
 fi
 prepare_env
+if [ $# -eq 2 ]; then
+	build_spec_subtarget $2
+	exit
+fi
 project_build
 
