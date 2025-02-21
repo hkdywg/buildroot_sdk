@@ -1,0 +1,88 @@
+
+#
+# some basic check
+#
+ifneq ($(origin TOP_DIR),environment)
+	$(error Please source setup.sh first)
+endif
+
+ifneq ($(wildcard ${TOP_DIR}/build/Makefile), $(abspath Makefile))
+	$(error $${TOP_DIR}/build/Makefile is not current Makefile)
+endif
+
+# Verbose flag
+ifeq (${BUILD_VERBOSE},0)
+	Q:=@
+else
+	Q:=
+endif
+export Q
+
+define print_target
+	@printf '\033[1;36;40m [TARGET] $@ \033[0m\n'
+endef
+
+
+########################################################################
+# kernel targets
+########################################################################
+# configure kernel defconfig
+ifeq ($(CONFIG_BUILD_FOR_DEBUG), y)
+KERNEL_COFNIG_NAME := ${BUILD_PROJECT}_debug_defconfig
+else
+KERNEL_COFNIG_NAME := ${BUILD_PROJECT}_release_defconfig
+endif
+
+${KERNEL_BUILD_PATH}:
+	${Q}mkdir -p $@
+
+define copy_Image_action
+	${Q}mkdir -p ${KERNEL_BUILD_PATH}/elf
+	${Q}cp ${KERNEL_BUILD_PATH}/arch/${ARCH}/boot/Image ${KERNEL_BUILD_PATH}/elf/
+	${Q}cp ${KERNEL_BUILD_PATH}/vmlinux ${KERNEL_BUILD_PATH}/elf/
+endef
+
+define copy_ko_action
+	${Q}mkdir -p ${KERNEL_BUILD_PATH}/ko
+	${Q}find ${1} -name '*.ko' -exec cp -f {} ${KERNEL_BUILD_PATH}/ko/ \;
+endef
+
+kernel%: export CROSS_COMPILE=${CROSS_COMPILE_64}
+kernel%: export INSTALL_MOD_PATH=${KERNEL_BUILD_PATH}/modules
+kernel%: export ARCH=${KERNEL_ARCH}
+
+KERNEL_OUTPUT_CONFIG_PATH := ${KERNEL_BUILD_PATH}/.config
+KERNEL_DEFAULT_COFNIG_PATH := ${TOP_DIR}/device/${BUILD_PROJECT}/${KERNEL_COFNIG_NAME}
+
+${KERNEL_OUTPUT_CONFIG_PATH}: ${KERNEL_DEFAULT_COFNIG_PATH}
+	$(call print_target})
+	${Q}echo "Kenel's defconfig is update. Use it"
+	${Q}mkdir -p $(dir ${KERNEL_OUTPUT_CONFIG_PATH})
+	${Q}cmp -s ${KERNEL_DEFAULT_COFNIG_PATH} ${KERNEL_OUTPUT_CONFIG_PATH} || \
+		${Q}cp -vb ${KERNEL_DEFAULT_COFNIG_PATH} ${KERNEL_OUTPUT_CONFIG_PATH}
+
+kernel-menuconfig: ${KERNEL_OUTPUT_CONFIG_PATH}
+	$(call print_target)
+	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} menuconfig
+
+kernel-setconfig: ${KERNEL_OUTPUT_CONFIG_PATH}
+	$(call print_target)
+	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} setconfig 'SCRIPT_ARG=${SCRIPT_ARG}'
+	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} savedefconfig
+
+kernel-build: ${KERNEL_OUTPUT_CONFIG_PATH}
+	$(call print_target)
+	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} Image modules
+	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} modules_install
+
+kernel: kernel-build
+	$(call print_target)
+	$(call copy_Image_action)
+	$(call copy_ko_action, ${INSTALL_MOD_PATH})
+
+
+
+
+
+
+

@@ -7,6 +7,10 @@ PROJECT_ARRAY=
 
 TOP_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")"  &> /dev/null && pwd)
 cd ${TOP_DIR}
+COREN=$(cat /proc/cpuinfo | grep 'processor' | wc -l)
+TOOLCHAIN_PATH=${TOP_DIR}/tool_chain
+
+export TOP_DIR COREN
 
 function print_info()
 {
@@ -32,11 +36,11 @@ function build_usage()
 
 function get_toolchain()
 {
-	toolchain_file=${TOOLCHAIN_URL##*/}
-	toolchain_path=tool_chain/$(basename "${toolchain_file}" .tar.xz)
-	if [ ! -d ${toolchain_path} ]; then
+	#toolchain_file=${TOOLCHAIN_URL##*/}
+	#TOOLCHAIN_PATH=${TOP_DIR}/tool_chain/$(basename "${toolchain_file}" .tar.xz)
+	if [ ! -d ${TOOLCHAIN_PATH} ]; then
 		print_info "Toolchain does not exist, download it now ..."
-		mkdir -p ${toolchain_path}
+		mkdir -p ${TOOLCHAIN_PATH}
 		echo "toolchain_url: ${TOOLCHAIN_URL}"
 		echo "toolchain_file: ${toolchain_file}"
 
@@ -101,22 +105,21 @@ function choose_project()
 
 function prepare_env()
 {
-	BUILD_PROJECT_CONFIG=device/${BUILD_PROJECT}/project_config.sh
+	BUILD_PROJECT_CONFIG=device/${BUILD_PROJECT}/project_config
 	if [ ! -f ${BUILD_PROJECT_CONFIG} ]; then
 		print_error "${BUILD_PROJECT_CONFIG} not found!"
 		exit 1
 	fi
 
 	source ${BUILD_PROJECT_CONFIG}
-	source build/${BUILD_ENV} > /dev/null 2>&1
-
-	print_info "OUTPUT_DIR: ${OUTPUT_DIR}"
+	source build/setup.sh
+	#source build/setup.sh > /dev/null 2>&1
 }
 
 function project_build() 
 {
 	build_all
-	if [ $? -rq 0 ];then
+	if [ $? -eq 0 ];then
 		print_info "Build project ${BUILD_PROJECT} success!"
 	else
 		print_error "Build project  ${BUILD_PROJECT} failed!"
@@ -125,7 +128,7 @@ function project_build()
 }
 
 
-#get_toolchain
+get_toolchain
 get_available_project
 if [  $# -eq 1 ]; then
     if [ "$1" = "lunch" ]; then
