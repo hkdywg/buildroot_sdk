@@ -6,7 +6,24 @@ function __build_default_env()
 {
 	DEBUG=${DEBUG:-0}
 	RELEASE_VERSION=${RELEASE_VERSION:-0}
-	BUILD_VERBOSE=${BUILD_VERBOSE:-0}
+	BUILD_VERBOSE=${BUILD_VERBOSE:-1}
+}
+
+function sdk_version()
+{
+	if [ -n "$1" ]; then
+		SDK_VERSION="$1"
+	fi
+
+	if [ "$SDK_VERSION" = 64bit ]; then
+		CROSS_COMPILE=${CROSS_COMPILE_64}
+		CROSS_COMPILE_PATH=${CROSS_COMPILE_PATH_64}
+		KERNEL_ARCH=arm64
+	elif [ "$SDK_VERSION" = 32bit ]; then
+		CROSS_COMPILE=${CROSS_COMPILE_32}
+		CROSS_COMPILE_PATH=${CROSS_COMPILE_PATH_32}
+		KERNEL_ARCH=arm
+	fi
 }
 
 function setup_build_env()
@@ -28,22 +45,27 @@ function setup_build_env()
 	UBOOT_PATH="${TOP_DIR}"/uboot
 	KERNEL_PATH="${TOP_DIR}"/kernel
 	RAMDISK_PATH="${TOP_DIR}"/ramdisk
-	ROOTFS_PATH="${TOP_DIR}"/buildroot
+	ROOTFS_PATH="${TOP_DIR}"/buildroot-2021.05
 	APPS_PATH="${TOP_DIR}"/apps
 
 	export DEBUG RELEASE_VERSION BUILD_VERBOSE BUILD_PROJECT
 	export BUILD_PATH BUILD_OUT_PATH UBOOT_BUILD_PATH KERNEL_BUILD_PATH ROOTFS_BUILD_PATH
 	export UBOOT_PATH KERNEL_PATH RAMDISK_PATH ROOTFS_PATH APPS_PATH 
 
+	# buildroot config
+	export BR_BUILD_PATH="${BUILD_OUT_PATH}"/buildroot
+	export BR_INSTALL_PATH=${BR_BUILD_PATH}/tmp_rootfs
+
 	# toolchain path
-	export CROSS_COMPILE_64="aarch64-linux-gnu-"
-	export CROSS_COMPILE_32=arm-linux-gnueabihf-
-	export KERNEL_ARCH=arm64
+	CROSS_COMPILE_64=aarch64-linux-gnu-
+	CROSS_COMPILE_32=arm-linux-gnueabihf-
 	CROSS_COMPILE_PATH_64=${TOOLCHAIN_PATH}/gcc-linaro-7.4.1-2019.02-x86_64_aarch64-linux-gnu
 	CROSS_COMPILE_PATH_32=${TOOLCHAIN_PATH}/gcc-linaro-7.4.1-2019.02-x86_64_arm-linux-gnueabihf
-	path_prepend "$CROSS_COMPILE_PATH_64"/bin
-	echo --------- $PATH	
-	echo "toolchain path: ${TOOLCHAIN_PATH}"
+
+	sdk_version
+
+	path_prepend "$CROSS_COMPILE_PATH"/bin
+	export CROSS_COMPILE_PATH CROSS_COMPILE KERNEL_ARCH
 }
 
 
