@@ -40,6 +40,7 @@ function setup_build_env()
 	UBOOT_BUILD_PATH="${BUILD_OUT_PATH}"/uboot
 	KERNEL_BUILD_PATH="${BUILD_OUT_PATH}"/kernel
 	ROOTFS_BUILD_PATH="${BUILD_OUT_PATH}"/rootfs
+	IMAGE_OUTPUT_PATH="${BUILD_OUT_PATH}"/image
 
 	#  source file folders
 	UBOOT_PATH="${TOP_DIR}"/uboot
@@ -49,7 +50,7 @@ function setup_build_env()
 	APPS_PATH="${TOP_DIR}"/apps
 
 	export DEBUG RELEASE_VERSION BUILD_VERBOSE BUILD_PROJECT
-	export BUILD_PATH BUILD_OUT_PATH UBOOT_BUILD_PATH KERNEL_BUILD_PATH ROOTFS_BUILD_PATH
+	export BUILD_PATH BUILD_OUT_PATH UBOOT_BUILD_PATH KERNEL_BUILD_PATH ROOTFS_BUILD_PATH IMAGE_OUTPUT_PATH
 	export UBOOT_PATH KERNEL_PATH RAMDISK_PATH ROOTFS_PATH APPS_PATH 
 
 	# buildroot config
@@ -66,6 +67,14 @@ function setup_build_env()
 
 	path_prepend "$CROSS_COMPILE_PATH"/bin
 	export CROSS_COMPILE_PATH CROSS_COMPILE KERNEL_ARCH
+
+	# configure partition table
+	PARTITION_XML="${TOP_DIR}"/device/${BUILD_PROJECT}/config/partition_emmc.xml
+	if [ ! -e ${PARTITION_XML} ];then
+		print_error "${PARTITION_XML} does not exist!"
+		return 1
+	fi
+	export  PARTITION_XML
 }
 
 

@@ -86,6 +86,10 @@ kernel: kernel-build
 # rootfs targets
 ########################################################################
 
+define raw2cimg
+	${Q}python3 ${TOP_DIR}/build/tools/image_tool/raw2cimg.py ${IMAGE_OUTPUT_PATH}/rawimages/${1} ${IMAGE_OUTPUT_PATH} ${PARTITION_XML}
+endef
+
 ${ROOTFS_BUILD_PATH}:
 	${Q}mkdir -p $@
 
@@ -113,9 +117,16 @@ br-rootfs-build:
 	${Q}$(MAKE) -C ${ROOTFS_PATH} ${BR_DEFCONFIG} BR2_TOOLCHAIN_EXTERNAL_PATH=${CROSS_COMPILE_PATH} O=${BR_BUILD_PATH}
 	${Q}${ROOTFS_PATH}/utils/brmake -j${COREN} -C ${ROOTFS_PATH} O=${BR_BUILD_PATH}
 
-rootfs-build: br-rootfs-build
+${IMAGE_OUTPUT_PATH}/rawimages:
+	${Q}mkdir -p $@
 
-rootfs: br-rootfs-prepare rootfs-build
+br-rootfs-pack:${IMAGE_OUTPUT_PATH}/rawimages
+	$(call print_target)
+	${Q}cp  ${BR_BUILD_PATH}/images/rootfs.ext4 ${IMAGE_OUTPUT_PATH}/rawimages/rootfs.emmc
+	$(call raw2cimg ,rootfs.emmc)
+
+
+rootfs: br-rootfs-prepare br-rootfs-build br-rootfs-pack
 	$(call print_target)
 
 
