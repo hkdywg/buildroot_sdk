@@ -105,7 +105,7 @@ function choose_project()
 
 function prepare_env()
 {
-	BUILD_PROJECT_CONFIG=device/${BUILD_PROJECT}/project_config
+	BUILD_PROJECT_CONFIG=device/${BUILD_PROJECT}/config/project_config
 	if [ ! -f ${BUILD_PROJECT_CONFIG} ]; then
 		print_error "${BUILD_PROJECT_CONFIG} not found!"
 		exit 1
