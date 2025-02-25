@@ -38,7 +38,7 @@ ${KERNEL_BUILD_PATH}:
 
 define copy_Image_action
 	${Q}mkdir -p ${KERNEL_BUILD_PATH}/elf
-	${Q}cp ${KERNEL_BUILD_PATH}/arch/${ARCH}/boot/Image ${KERNEL_BUILD_PATH}/elf/
+	${Q}cp ${KERNEL_BUILD_PATH}/arch/${KERNEL_ARCH}/boot/Image ${KERNEL_BUILD_PATH}/elf/
 	${Q}cp ${KERNEL_BUILD_PATH}/vmlinux ${KERNEL_BUILD_PATH}/elf/
 endef
 
@@ -53,7 +53,7 @@ kernel%: export ARCH=${KERNEL_ARCH}
 $(warning ${KERNEL_ARCH})
 
 KERNEL_OUTPUT_CONFIG_PATH := ${KERNEL_BUILD_PATH}/.config
-KERNEL_DEFAULT_COFNIG_PATH := ${TOP_DIR}/device/${BUILD_PROJECT}/${KERNEL_COFNIG_NAME}
+KERNEL_DEFAULT_COFNIG_PATH := ${TOP_DIR}/device/${BUILD_PROJECT}/config/${KERNEL_COFNIG_NAME}
 
 ${KERNEL_OUTPUT_CONFIG_PATH}: ${KERNEL_DEFAULT_COFNIG_PATH}
 	$(call print_target})
@@ -89,8 +89,24 @@ kernel: kernel-build
 ${ROOTFS_BUILD_PATH}:
 	${Q}mkdir -p $@
 
-
-br-rootfs-build:export TARGET_OUTPUT_DIR=${BR_ROOTFS_DIR}
+br-rootfs-prepare:export INSTALL_MOD_PATH=${KERNEL_BUILD_PATH}/modules
+br-rootfs-prepare:export BR_OVERLAY_PATH=${TOP_DIR}/buildroot-2021.05/board/overlay
+br-rootfs-prepare:
+	$(call print_target)
+	#${Q}ln -s ${TOP_DIR}/device/${BUILD_PROJECT}/overlay ${BR_OVERLAY_PATH}
+	${Q}rm -rf ${BR_OVERLAY_PATH}/*
+	# copy system ko file 
+	${Q}cp -arf ${INSTALL_MOD_PATH}/lib ${BR_OVERLAY_PATH}/
+	# copy device overlay files
+	${Q}cp -arf ${TOP_DIR}/device/common/overlay/* ${BR_OVERLAY_PATH}/
+	${Q}cp -arf ${TOP_DIR}/device/${BUILD_PROJECT}/overlay_file/* ${BR_OVERLAY_PATH}/
+	# strip
+	${Q}find ${BR_OVERLAY_PATH} -name "*.ko" -type f -printf 'striping %p\n' -exec ${CROSS_COMPILE}strip --strip-unneeded {} \;
+	${Q}find ${BR_OVERLAY_PATH} -name "*.so*" -type f -printf 'striping %p\n' -exec ${CROSS_COMPILE}strip --strip-all {} \;
+	${Q}find ${BR_OVERLAY_PATH} -executable -type f ! -name "*.sh" ! -path "*etc*" -exec ${CROSS_COMPILE}strip --strip-all {} \;
+	
+ 
+br-rootfs-build:export TARGET_OUTPUT_DIR=${BR_BUILD_PATH}
 br-rootfs-build:export BR_DEFCONFIG=${BUILD_PROJECT}_br_defconfig
 br-rootfs-build:
 	$(call print_target)
@@ -99,7 +115,7 @@ br-rootfs-build:
 
 rootfs-build: br-rootfs-build
 
-rootfs: rootfs-build
+rootfs: br-rootfs-prepare rootfs-build
 	$(call print_target)
 
 
