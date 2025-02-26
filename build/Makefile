@@ -38,7 +38,8 @@ ${KERNEL_BUILD_PATH}:
 
 define copy_Image_action
 	${Q}mkdir -p ${KERNEL_BUILD_PATH}/elf
-	${Q}cp ${KERNEL_BUILD_PATH}/arch/${KERNEL_ARCH}/boot/Image ${KERNEL_BUILD_PATH}/elf/
+	${Q}mkdir -p ${RAMDISK_OUTPUT_PATH}/target
+	${Q}cp ${KERNEL_BUILD_PATH}/arch/${KERNEL_ARCH}/boot/Image ${RAMDISK_OUTPUT_PATH}/target/
 	${Q}cp ${KERNEL_BUILD_PATH}/vmlinux ${KERNEL_BUILD_PATH}/elf/
 endef
 
@@ -50,7 +51,6 @@ endef
 kernel%: export INSTALL_MOD_PATH=${KERNEL_BUILD_PATH}/modules
 kernel%: export ARCH=${KERNEL_ARCH}
 
-$(warning ${KERNEL_ARCH})
 
 KERNEL_OUTPUT_CONFIG_PATH := ${KERNEL_BUILD_PATH}/.config
 KERNEL_DEFAULT_COFNIG_PATH := ${TOP_DIR}/device/${BUILD_PROJECT}/config/${KERNEL_COFNIG_NAME}
@@ -76,10 +76,64 @@ kernel-build: ${KERNEL_OUTPUT_CONFIG_PATH}
 	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} Image modules
 	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} modules_install
 
-kernel: kernel-build
+kernel-dts:
+	$(call print_target)
+	${Q}$(MAKE) -j${COREN} -C ${KERNEL_PATH} O=${KERNEL_BUILD_PATH} dtbs
+
+kernel:${RAMDISK_OUTPUT_PATH}/workspace
+kernel: kernel-build kernel-dts 
 	$(call print_target)
 	$(call copy_Image_action)
 	$(call copy_ko_action, ${INSTALL_MOD_PATH})
+	${Q}cp ${KERNEL_BUILD_PATH}/arch/${KERNEL_ARCH}/boot/dts/${BRAND}/*.dtb  ${RAMDISK_OUTPUT_PATH}/workspace
+
+kernel-clean:
+	$(call print_target)
+	${Q}${MAKE} -j${COREN} -C ${KERNEL_PATH} distclean
+	${Q}$(if $(wildcard ${KERNEL_BUILD_PATH}), rm -rf ${KERNEL_BUILD_PATH},)
+	${Q}rm -f ${KERNEL_BUILD_PATH}/elf/vmlinux
+	${Q}$(if $(wildcard ${INSTALL_MODE_PATH}), rm -rf ${INSTALL_MODE_PATH},)
+
+
+########################################################################
+# boot targets
+########################################################################
+
+define gen_cpio
+	cd ${RAMDISK_OUTPUT_PATH}/configs; \
+	${PREBUILD_TOOLS_PATH}/gen_init_cpio ${RAMDISK_OUTPUT_PATH}/configs/$(1) > ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio
+endef
+
+${RAMDISK_OUTPUT_PATH}/target:
+	${Q}mkdir -p $@
+
+${RAMDISK_OUTPUT_PATH}/workspace:
+	${Q}mkdir -p $@
+
+${RAMDISK_OUTPUT_PATH}/configs:
+	${Q}mkdir -p $@
+
+ramdisk: ${RAMDISK_OUTPUT_PATH}/target
+ramdisk: ${RAMDISK_OUTPUT_PATH}/configs
+ramdisk: ${RAMDISK_OUTPUT_PATH}/workspace
+ramdisk:
+	${Q}rm -rf ${RAMDISK_OUTPUT_PATH}/target/*
+	${Q}rm -rf ${RAMDISK_OUTPUT_PATH}/workspace/*
+	${Q}cp -rf ${RAMDISK_PATH}/init_ramfs/* ${RAMDISK_OUTPUT_PATH}/target/
+	${Q}cp -rf ${RAMDISK_PATH}/configs/* ${RAMDISK_OUTPUT_PATH}/configs/
+	${Q}cp -rf ${TOP_DIR}/device/${BUILD_PROJECT}/overlay/ramfs/*  ${RAMDISK_OUTPUT_PATH}/target/
+
+boot: ramdisk kernel
+	$(call print_target)
+	$(call gen_cpio,onekernel_fixed_files.txt)
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/target/Image > ${RAMDISK_OUTPUT_PATH}/workspace/Image.gz
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio > ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio.gz
+
+ramboot: kernel
+	$(call print_target)
+	$(call gen_cpio,ramboot_fixed_files.txt)
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/target/Image > ${RAMDISK_OUTPUT_PATH}/workspace/Image.gz
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio > ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio.gz
 
 
 ########################################################################
@@ -103,7 +157,7 @@ br-rootfs-prepare:
 	${Q}cp -arf ${INSTALL_MOD_PATH}/lib ${BR_OVERLAY_PATH}/
 	# copy device overlay files
 	${Q}cp -arf ${TOP_DIR}/device/common/overlay/* ${BR_OVERLAY_PATH}/
-	${Q}cp -arf ${TOP_DIR}/device/${BUILD_PROJECT}/overlay_file/* ${BR_OVERLAY_PATH}/
+	${Q}cp -arf ${TOP_DIR}/device/${BUILD_PROJECT}/overlay/rootfs/* ${BR_OVERLAY_PATH}/
 	# strip
 	${Q}find ${BR_OVERLAY_PATH} -name "*.ko" -type f -printf 'striping %p\n' -exec ${CROSS_COMPILE}strip --strip-unneeded {} \;
 	${Q}find ${BR_OVERLAY_PATH} -name "*.so*" -type f -printf 'striping %p\n' -exec ${CROSS_COMPILE}strip --strip-all {} \;
