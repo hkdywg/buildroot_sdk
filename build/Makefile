@@ -22,10 +22,60 @@ define print_target
 	@printf '\033[1;36;40m [TARGET] $@ \033[0m\n'
 endef
 
+########################################################################
+# uboot targets
+########################################################################
+
+# configure kernel defconfig
+ifeq ($(CONFIG_BUILD_FOR_DEBUG), y)
+UBOOT_COFNIG_NAME := uboot_debug_defconfig
+else
+UBOOT_COFNIG_NAME := uboot_release_defconfig
+endif
+UBOOT_OUT_CONFIG_PATH := ${UBOOT_BUILD_PATH}/.config
+UBOOT_DEFAULT_COFNIG_PATH := ${TOP_DIR}/device/${BUILD_PROJECT}/config/${UBOOT_COFNIG_NAME}
+
+define uboot_release_action
+	${Q}sed -i "s/CONFIG_BOOTDELAY=1/CONFIG_BOOTDELAY=-2/g" ${UBOOT_OUT_CONFIG_PATH}
+endef
+
+${UBOOT_OUT_CONFIG_PATH}: ${UBOOT_DEFAULT_COFNIG_PATH}
+	$(call print_target})
+	${Q}echo "uboot's defconfig is update. Use it"
+	${Q}mkdir -p $(dir ${UBOOT_OUT_CONFIG_PATH})
+	${Q}cmp -s ${UBOOT_DEFAULT_COFNIG_PATH} ${UBOOT_OUT_CONFIG_PATH} || \
+		${Q}cp -vb ${UBOOT_DEFAULT_COFNIG_PATH} ${UBOOT_OUT_CONFIG_PATH}
+ifeq ($(CONFIG_BUILD_FOR_DEBUG), )
+	$(call uboot_release_action)
+endif
+
+u-boo%: export KBUILD_OUTPUT=${UBOOT_BUILD_PATH}
+
+u-boot-menuconfig: ${UBOOT_OUT_CONFIG_PATH}
+	$(call print_target)
+	${Q}$(MAKE) -j${COREN} -C ${UBOOT_PATH} menuconfig
+	${Q}$(MAKE) -j${COREN} -C ${UBOOT_PATH} savedefconfig
+
+u-boot:${IMAGE_OUTPUT_PATH}/rawimages
+u-boot:${UBOOT_OUT_CONFIG_PATH}
+u-boot:
+	$(call print_target)
+	${Q}$(MAKE) -j${COREN} -C ${UBOOT_PATH} olddefconfig
+ifeq ($(KERNEL_ARCH), arm64)
+	${Q}$(MAKE) -j${COREN} -C ${UBOOT_PATH} ARCH=arm all
+endif
+	${Q}cp ${UBOOT_BUILD_PATH}/u-boot.bin ${IMAGE_OUTPUT_PATH}/rawimages/
+
+u-boot-clean:
+	$(call print_target)
+	${Q}${MAKE} -j${COREN} -C ${UBOOT_PATH} distclean
+
+
 
 ########################################################################
 # kernel targets
 ########################################################################
+
 # configure kernel defconfig
 ifeq ($(CONFIG_BUILD_FOR_DEBUG), y)
 KERNEL_COFNIG_NAME := kernel_debug_defconfig
@@ -48,8 +98,8 @@ define copy_ko_action
 	${Q}find ${1} -name '*.ko' -exec cp -f {} ${KERNEL_BUILD_PATH}/ko/ \;
 endef
 
-kernel%: export INSTALL_MOD_PATH=${KERNEL_BUILD_PATH}/modules
-kernel%: export ARCH=${KERNEL_ARCH}
+kerne%: export INSTALL_MOD_PATH=${KERNEL_BUILD_PATH}/modules
+kerne%: export ARCH=${KERNEL_ARCH}
 
 
 KERNEL_OUTPUT_CONFIG_PATH := ${KERNEL_BUILD_PATH}/.config
@@ -182,6 +232,10 @@ br-rootfs-pack:${IMAGE_OUTPUT_PATH}/rawimages
 
 rootfs: br-rootfs-prepare br-rootfs-build br-rootfs-pack
 	$(call print_target)
+
+rootfs-clean:
+	$(call print_target)
+	${Q}rm -rf ${BR_BUILD_PATH}/target/* 
 
 
 ########################################################################

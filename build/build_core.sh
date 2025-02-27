@@ -35,6 +35,11 @@ function path_pend()
 	export $path_variable="${!path_variable:+${!path_variable}:}$1"
 }
 
+function build_uboot()
+{
+	cd ${BUILD_PATH} || return
+	make u-boot || return $?
+}
 
 function build_kernel()
 {
@@ -60,6 +65,11 @@ function build_gpt()
 	python3 ${BUILD_PATH}/tools/image_tool/gen_gpt.py ${TOP_DIR}/device/${BUILD_PROJECT}/config/partition_emmc.xml ${BUILD_OUT_PATH}/image/rawimages/ 
 }
 
+function build_img()
+{
+	python3 ${BUILD_PATH}/tools/image_tool/mergeimg.py ${TOP_DIR}/device/${BUILD_PROJECT}/config/partition_emmc.xml ${BUILD_OUT_PATH}/image/rawimages/ 
+}
+
 function build_system()
 {
 	cd ${BUILD_PATH} || return
@@ -69,9 +79,13 @@ function build_system()
 function build_all()
 {
 	# build bsp
-#	build_uboot || return $?
+	build_uboot || return $?
 	build_kernel || return $?
-#	build_rootfs || return $?
+	build_rootfs || return $?
+	build_boot || return $?
+	build_gpt || return $?
+	build_system || return $?
+	build_img || return $?
 }
 
 function clean_all()
