@@ -130,7 +130,7 @@ function project_build()
 function build_spec_subtarget()
 {
 	local target
-	local support_target=("uboot" "kernel" "rootfs")
+	local support_target=("uboot" "kernel" "rootfs" "boot" "gpt" "system")
 	for target in "${support_target[@]}";  do
 		if [ "$target" = "$1" ]; then		
 			prepare_env

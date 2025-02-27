@@ -5,7 +5,6 @@
 # pack_rootfs -> rootfs.emmc / rootfs.spinand ( rootfs )
 # pack_system -> system.emmc / system.spinand (3rd/sdk shared libraries,  spinand-ubifs/ emmc-ext4)
 # pack_gpt -> gpt.img (emmc only)
-# pack_cfg -> cfg.emmc / cfg.spinand (configs partition for saving configs)
 
 function path_remove()
 {
@@ -51,9 +50,20 @@ function build_rootfs()
 
 function build_boot()
 {
-	echo "--------------"
 	cd ${BUILD_PATH} || return
 	make boot || return $?
+}
+
+function build_gpt()
+{
+	mkdir -p "${BUILD_OUT_PATH}"/image/rawimages
+	python3 ${BUILD_PATH}/tools/image_tool/gen_gpt.py ${TOP_DIR}/device/${BUILD_PROJECT}/config/partition_emmc.xml ${BUILD_OUT_PATH}/image/rawimages/ 
+}
+
+function build_system()
+{
+	cd ${BUILD_PATH} || return
+	make system || return $?
 }
 
 function build_all()

@@ -184,5 +184,27 @@ rootfs: br-rootfs-prepare br-rootfs-build br-rootfs-pack
 	$(call print_target)
 
 
+########################################################################
+# system targets
+########################################################################
+
+define pack_image
+${Q}${BUILD_PATH}/tools/prebuild/make_ext4fs -l ${3} -L $(shell echo ${1} | tr '[:lower:]' '[:upper:]') ${IMAGE_OUTPUT_PATH}/rawimages/${1}.emmc ${2}
+endef
+
+${BUILD_OUT_PATH}/system:
+	${Q}mkdir -p $@
+
+${IMAGE_OUTPUT_PATH}/rawimages/system.emmc: ${BUILD_OUT_PATH}/system
+	$(call pack_image,system,${BUILD_OUT_PATH}/system,40M)
+
+system:${IMAGE_OUTPUT_PATH}/rawimages/system.emmc
+system:
+	$(call print_target)
+	$(call raw2cimg ,system.emmc)
+
+
+
+
 
 
