@@ -450,7 +450,7 @@ if __name__ == '__main__':
     (main_data, back_data) = create(back_lba, alternate_lba, entrylist)
 
     create_mbr()
-    with open(os.path.join(args.output_path, "main_gpt.img"), "wb") as f:
+    with open(os.path.join(args.output_path, "main_gpt.emmc"), "wb") as f:
         f.write(main_data)
-    with open(os.path.join(args.output_path, "back_gpt.img"), "wb") as f:
+    with open(os.path.join(args.output_path, "back_gpt.emmc"), "wb") as f:
         f.write(back_data)
