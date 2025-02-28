@@ -88,8 +88,8 @@ ${KERNEL_BUILD_PATH}:
 
 define copy_Image_action
 	${Q}mkdir -p ${KERNEL_BUILD_PATH}/elf
-	${Q}mkdir -p ${RAMDISK_OUTPUT_PATH}/target
-	${Q}cp ${KERNEL_BUILD_PATH}/arch/${KERNEL_ARCH}/boot/Image ${RAMDISK_OUTPUT_PATH}/target/
+	${Q}mkdir -p ${RAMDISK_OUTPUT_PATH}/workspace
+	${Q}cp ${KERNEL_BUILD_PATH}/arch/${KERNEL_ARCH}/boot/Image ${RAMDISK_OUTPUT_PATH}/workspace/
 	${Q}cp ${KERNEL_BUILD_PATH}/vmlinux ${KERNEL_BUILD_PATH}/elf/
 endef
 
@@ -151,8 +151,15 @@ kernel-clean:
 
 define gen_cpio
 	cd ${RAMDISK_OUTPUT_PATH}/configs; \
-	${PREBUILD_TOOLS_PATH}/gen_init_cpio ${RAMDISK_OUTPUT_PATH}/configs/$(1) > ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio
+	${PREBUILD_TOOLS_PATH}/gen_init_cpio ${RAMDISK_OUTPUT_PATH}/configs/$(1) > ${RAMDISK_OUTPUT_PATH}/workspace/ramfs.cpio
 endef
+
+define gen_boot
+	cd ${RAMDISK_OUTPUT_PATH}/workspace; \
+	cp ${TOP_DIR}/device/${BUILD_PROJECT}/multi.its ./multi.its; \
+	${UBOOT_BUILD_PATH}/tools/mkimage -f ./multi.its -r ${RAMDISK_OUTPUT_PATH}/workspace/boot.emmc
+endef
+
 
 ${RAMDISK_OUTPUT_PATH}/target:
 	${Q}mkdir -p $@
@@ -173,17 +180,21 @@ ramdisk:
 	${Q}cp -rf ${RAMDISK_PATH}/configs/* ${RAMDISK_OUTPUT_PATH}/configs/
 	${Q}cp -rf ${TOP_DIR}/device/${BUILD_PROJECT}/overlay/ramfs/*  ${RAMDISK_OUTPUT_PATH}/target/
 
-boot: ramdisk kernel
+boot: ramdisk kernel u-boot
 	$(call print_target)
 	$(call gen_cpio,onekernel_fixed_files.txt)
-	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/target/Image > ${RAMDISK_OUTPUT_PATH}/workspace/Image.gz
-	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio > ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio.gz
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/Image > ${RAMDISK_OUTPUT_PATH}/workspace/Image.gz
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/ramfs.cpio > ${RAMDISK_OUTPUT_PATH}/workspace/ramfs.cpio.gz
+	$(call gen_boot)
+	${Q}cp ${RAMDISK_OUTPUT_PATH}/workspace/boot.emmc ${IMAGE_OUTPUT_PATH}/rawimages
 
 ramboot: kernel
 	$(call print_target)
 	$(call gen_cpio,ramboot_fixed_files.txt)
-	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/target/Image > ${RAMDISK_OUTPUT_PATH}/workspace/Image.gz
-	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio > ${RAMDISK_OUTPUT_PATH}/workspace/boot.cpio.gz
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/Image > ${RAMDISK_OUTPUT_PATH}/workspace/Image.gz
+	${Q}gzip -9 -f -k ${RAMDISK_OUTPUT_PATH}/workspace/ramfs.cpio > ${RAMDISK_OUTPUT_PATH}/workspace/ramfs.cpio.gz
+	$(call gen_boot)
+	${Q}cp ${RAMDISK_OUTPUT_PATH}/workspace/boot.emmc ${IMAGE_OUTPUT_PATH}/rawimages
 
 
 ########################################################################
