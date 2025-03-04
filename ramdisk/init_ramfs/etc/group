@@ -23,5 +23,5 @@ staff:x:50:
 lock:x:54:
 netdev:x:82:
 users:x:100:
-user:x:1000:cvitek
+worker:x:1000:bitmain
 nogroup:x:65534:

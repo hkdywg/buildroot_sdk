@@ -1,4 +1,5 @@
 #!/bin/sh
+${CVI_SHOPTS}
 
 
 # Start all init scripts in /etc/init.d
