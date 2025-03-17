@@ -8,7 +8,7 @@ buildroot_sdk 是一个基于buildroot的编译平台，用来编译kernel/uboot
 ├── build               // 编译目录，存放编译脚本
 ├── build.sh            // 一键编译脚本
 ├── buildroot-2021.05   // buildroot 开源工具
-├── build_out  			// 执行一次完整编译后，存放编译输出文件及image
+├── build_out           // 执行一次完整编译后，存放编译输出文件及image
 ├── kernel              // 开源 linux 内核
 ├── device              // 存放board相关配置及差异化文件
 ├── ramdisk             // 存放最小文件系统的 prebuilt 目录
