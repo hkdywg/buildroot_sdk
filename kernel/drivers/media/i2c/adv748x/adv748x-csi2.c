@@ -214,9 +214,40 @@ unlock:
 	return ret;
 }
 
+static int adv748x_csi2_get_mbus_config(struct v4l2_subdev *sd, unsigned int pad,
+					struct v4l2_mbus_config *config)
+{
+	struct adv748x_csi2 *tx = adv748x_sd_to_csi2(sd);
+
+	if (pad != ADV748X_CSI2_SOURCE)
+		return -EINVAL;
+
+	config->type = V4L2_MBUS_CSI2_DPHY;
+	switch (tx->active_lanes) {
+	case 1:
+		config->flags = V4L2_MBUS_CSI2_1_LANE;
+		break;
+
+	case 2:
+		config->flags = V4L2_MBUS_CSI2_2_LANE;
+		break;
+
+	case 3:
+		config->flags = V4L2_MBUS_CSI2_3_LANE;
+		break;
+
+	case 4:
+		config->flags = V4L2_MBUS_CSI2_4_LANE;
+		break;
+	}
+
+	return 0;
+}
+
 static const struct v4l2_subdev_pad_ops adv748x_csi2_pad_ops = {
 	.get_fmt = adv748x_csi2_get_format,
 	.set_fmt = adv748x_csi2_set_format,
+	.get_mbus_config = adv748x_csi2_get_mbus_config,
 };
 
 /* -----------------------------------------------------------------------------
@@ -278,12 +309,27 @@ static int adv748x_csi2_init_controls(struct adv748x_csi2 *tx)
 int adv748x_csi2_init(struct adv748x_state *state, struct adv748x_csi2 *tx)
 {
 	int ret;
+	unsigned int ch;
+	struct device_node *ep;
 
 	if (!is_tx_enabled(tx))
 		return 0;
 
+	ep = state->endpoints[is_txa(tx) ? ADV748X_PORT_TXA : ADV748X_PORT_TXB];
+	if (!ep) {
+		adv_err(state, "No endpoint found for %s\n",
+				is_txa(tx) ? "txa" : "txb");
+		return -ENODEV;
+	}
+
+	if (of_property_read_u32(ep, "virtual-channel", &ch))
+		ch = 0;
+
+	if (ch > 3)
+		return -EINVAL;
+
 	/* Initialise the virtual channel */
-	adv748x_csi2_set_virtual_channel(tx, 0);
+	adv748x_csi2_set_virtual_channel(tx, ch);
 
 	adv748x_subdev_init(&tx->sd, state, &adv748x_csi2_ops,
 			    MEDIA_ENT_F_VID_IF_BRIDGE,

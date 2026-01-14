@@ -2,7 +2,6 @@
 #include <linux/bitops.h>
 #include <linux/serial_core.h>
 #include <linux/io.h>
-#include <linux/gpio.h>
 
 #define SCI_MAJOR		204
 #define SCI_MINOR_START		8
@@ -134,6 +133,7 @@ enum {
 
 #define HSCIF_SRHP_SHIFT	8
 #define HSCIF_SRHP_MASK		0x0f00
+#define HSCIF_RTRG_MASK		0x007f	/* HSRTRGR[15:7] are reserved bits*/
 
 /* SCPCR (Serial Port Control Register), SCIFA/SCIFB only */
 #define SCPCR_RTSC	BIT(4)	/* Serial Port RTS# Pin / Output Pin */

@@ -241,10 +241,10 @@ static int adv748x_power_up_tx(struct adv748x_csi2 *tx)
 	int ret = 0;
 
 	/* Enable n-lane MIPI */
-	adv748x_write_check(state, page, 0x00, 0x80 | tx->num_lanes, &ret);
+	adv748x_write_check(state, page, 0x00, 0x80 | tx->active_lanes, &ret);
 
 	/* Set Auto DPHY Timing */
-	adv748x_write_check(state, page, 0x00, 0xa0 | tx->num_lanes, &ret);
+	adv748x_write_check(state, page, 0x00, 0xa0 | tx->active_lanes, &ret);
 
 	/* ADI Required Write */
 	if (tx->src == &state->hdmi.sd) {
@@ -270,7 +270,7 @@ static int adv748x_power_up_tx(struct adv748x_csi2 *tx)
 	usleep_range(2000, 2500);
 
 	/* Power-up CSI-TX */
-	adv748x_write_check(state, page, 0x00, 0x20 | tx->num_lanes, &ret);
+	adv748x_write_check(state, page, 0x00, 0x20 | tx->active_lanes, &ret);
 	usleep_range(1000, 1500);
 
 	/* ADI Required Writes */
@@ -292,7 +292,7 @@ static int adv748x_power_down_tx(struct adv748x_csi2 *tx)
 	adv748x_write_check(state, page, 0x1e, 0x00, &ret);
 
 	/* Enable n-lane MIPI */
-	adv748x_write_check(state, page, 0x00, 0x80 | tx->num_lanes, &ret);
+	adv748x_write_check(state, page, 0x00, 0x80 | tx->active_lanes, &ret);
 
 	/* i2c_mipi_pll_en - 1'b1 */
 	adv748x_write_check(state, page, 0xda, 0x01, &ret);
@@ -357,14 +357,29 @@ static int adv748x_link_setup(struct media_entity *entity,
 	if (state->afe.tx) {
 		/* AFE Requires TXA enabled, even when output to TXB */
 		io10 |= ADV748X_IO_10_CSI4_EN;
-		if (is_txa(tx))
+		if (is_txa(tx)) {
+			/*
+			 * Output from the SD-core (480i and 576i) from the TXA
+			 * interface requires reducing the number of enabled
+			 * data lanes in order to guarantee a valid link
+			 * frequency.
+			 */
+			tx->active_lanes = min(tx->num_lanes, 2U);
 			io10 |= ADV748X_IO_10_CSI4_IN_SEL_AFE;
-		else
+		} else {
+			/* TXB has a single data lane, no need to adjust. */
 			io10 |= ADV748X_IO_10_CSI1_EN;
+		}
 	}
 
-	if (state->hdmi.tx)
+	if (state->hdmi.tx) {
+		/*
+		 * Restore the number of active lanes, in case we have gone
+		 * through an AFE->TXA streaming sessions.
+		 */
+		tx->active_lanes = tx->num_lanes;
 		io10 |= ADV748X_IO_10_CSI4_EN;
+	}
 
 	return io_clrset(state, ADV748X_IO_10, io10_mask, io10);
 }
@@ -596,6 +611,7 @@ static int adv748x_parse_csi2_lanes(struct adv748x_state *state,
 		}
 
 		state->txa.num_lanes = num_lanes;
+		state->txa.active_lanes = num_lanes;
 		adv_dbg(state, "TXA: using %u lanes\n", state->txa.num_lanes);
 	}
 
@@ -607,6 +623,7 @@ static int adv748x_parse_csi2_lanes(struct adv748x_state *state,
 		}
 
 		state->txb.num_lanes = num_lanes;
+		state->txb.active_lanes = num_lanes;
 		adv_dbg(state, "TXB: using %u lanes\n", state->txb.num_lanes);
 	}
 
@@ -796,6 +813,53 @@ static int adv748x_remove(struct i2c_client *client)
 	return 0;
 }
 
+#ifdef CONFIG_PM_SLEEP
+static int adv748x_suspend(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct adv748x_state *state = i2c_get_clientdata(client);
+	struct adv748x_csi2 *txa = &state->txa;
+	struct adv748x_csi2 *txb = &state->txb;
+
+	txa->vc_ch = 0x03 & (tx_read(txa, ADV748X_CSI_VC_REF) >>
+		    ADV748X_CSI_VC_REF_SHIFT);
+	txb->vc_ch = 0x03 & (tx_read(txb, ADV748X_CSI_VC_REF) >>
+		    ADV748X_CSI_VC_REF_SHIFT);
+
+	io_write(state, ADV748X_IO_PD, ADV748X_IO_PD_HDMI);
+
+	return 0;
+}
+
+static int adv748x_resume(struct device *dev)
+{
+	struct i2c_client *client = to_i2c_client(dev);
+	struct adv748x_state *state = i2c_get_clientdata(client);
+	struct adv748x_csi2 *txa = &state->txa;
+	struct adv748x_csi2 *txb = &state->txb;
+	int ret;
+
+	/* SW reset ADV748X to its default values */
+	ret = adv748x_reset(state);
+	if (ret)
+		adv_err(state, "Failed to reset hardware");
+
+	/* Initialise the virtual channel */
+	tx_write(txa, ADV748X_CSI_VC_REF,
+		 txa->vc_ch << ADV748X_CSI_VC_REF_SHIFT);
+	tx_write(txb, ADV748X_CSI_VC_REF,
+		 txb->vc_ch << ADV748X_CSI_VC_REF_SHIFT);
+
+	ret = adv748x_hdmi_set_resume_edid(&state->hdmi);
+
+	return ret;
+}
+
+static const struct dev_pm_ops adv748x_pm_ops = {
+	SET_LATE_SYSTEM_SLEEP_PM_OPS(adv748x_suspend, adv748x_resume)
+};
+#endif
+
 static const struct of_device_id adv748x_of_table[] = {
 	{ .compatible = "adi,adv7481", },
 	{ .compatible = "adi,adv7482", },
@@ -806,6 +870,9 @@ MODULE_DEVICE_TABLE(of, adv748x_of_table);
 static struct i2c_driver adv748x_driver = {
 	.driver = {
 		.name = "adv748x",
+#ifdef CONFIG_PM_SLEEP
+		.pm = &adv748x_pm_ops,
+#endif
 		.of_match_table = adv748x_of_table,
 	},
 	.probe_new = adv748x_probe,

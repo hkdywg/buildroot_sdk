@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
+ * Copyright (C) 2018 Renesas Electronics Corporation
  * Copyright (C) 2011 Freescale Semiconductor, Inc.
  */
 
@@ -104,9 +105,11 @@
 #define HDMI_FC_AUDICONF2                       0x1027
 #define HDMI_FC_AUDICONF3                       0x1028
 #define HDMI_FC_VSDIEEEID0                      0x1029
+#define HDMI_RCAR_FC_VSDIEEEID2                 0x1029
 #define HDMI_FC_VSDSIZE                         0x102A
 #define HDMI_FC_VSDIEEEID1                      0x1030
 #define HDMI_FC_VSDIEEEID2                      0x1031
+#define HDMI_RCAR_FC_VSDIEEEID0                 0x1031
 #define HDMI_FC_VSDPAYLOAD0                     0x1032
 #define HDMI_FC_VSDPAYLOAD1                     0x1033
 #define HDMI_FC_VSDPAYLOAD2                     0x1034
@@ -158,6 +161,8 @@
 #define HDMI_FC_SPDDEVICEINF                    0x1062
 #define HDMI_FC_AUDSCONF                        0x1063
 #define HDMI_FC_AUDSSTAT                        0x1064
+#define HDMI_FC_AUDSCHNLS7                      0x106e
+#define HDMI_FC_AUDSCHNLS8                      0x106f
 #define HDMI_FC_DATACH0FILL                     0x1070
 #define HDMI_FC_DATACH1FILL                     0x1071
 #define HDMI_FC_DATACH2FILL                     0x1072
@@ -252,6 +257,7 @@
 #define HDMI_FC_POL2                            0x10DB
 #define HDMI_FC_PRCONF                          0x10E0
 #define HDMI_FC_SCRAMBLER_CTRL                  0x10E1
+#define HDMI_FC_PACKET_TX_EN                    0x10E3
 
 #define HDMI_FC_GMD_STAT                        0x1100
 #define HDMI_FC_GMD_EN                          0x1101
@@ -286,6 +292,37 @@
 #define HDMI_FC_GMD_PB25                        0x111E
 #define HDMI_FC_GMD_PB26                        0x111F
 #define HDMI_FC_GMD_PB27                        0x1120
+
+#define HDMI_FC_DRM_UP                          0x1167
+#define HDMI_FC_DRM_HB0                         0x1168
+#define HDMI_FC_DRM_HB1                         0x1169
+#define HDMI_FC_DRM_PB0                         0x116A
+#define HDMI_FC_DRM_PB1                         0x116B
+#define HDMI_FC_DRM_PB2                         0x116C
+#define HDMI_FC_DRM_PB3                         0x116D
+#define HDMI_FC_DRM_PB4                         0x116E
+#define HDMI_FC_DRM_PB5                         0x116F
+#define HDMI_FC_DRM_PB6                         0x1170
+#define HDMI_FC_DRM_PB7                         0x1171
+#define HDMI_FC_DRM_PB8                         0x1172
+#define HDMI_FC_DRM_PB9                         0x1173
+#define HDMI_FC_DRM_PB10                        0x1174
+#define HDMI_FC_DRM_PB11                        0x1175
+#define HDMI_FC_DRM_PB12                        0x1176
+#define HDMI_FC_DRM_PB13                        0x1177
+#define HDMI_FC_DRM_PB14                        0x1178
+#define HDMI_FC_DRM_PB15                        0x1179
+#define HDMI_FC_DRM_PB16                        0x117A
+#define HDMI_FC_DRM_PB17                        0x117B
+#define HDMI_FC_DRM_PB18                        0x117C
+#define HDMI_FC_DRM_PB19                        0x117D
+#define HDMI_FC_DRM_PB20                        0x117E
+#define HDMI_FC_DRM_PB21                        0x117F
+#define HDMI_FC_DRM_PB22                        0x1180
+#define HDMI_FC_DRM_PB23                        0x1181
+#define HDMI_FC_DRM_PB24                        0x1182
+#define HDMI_FC_DRM_PB25                        0x1183
+#define HDMI_FC_DRM_PB26                        0x1184
 
 #define HDMI_FC_DBGFORCE                        0x1200
 #define HDMI_FC_DBGAUD0CH0                      0x1201
@@ -475,6 +512,9 @@
 #define HDMI_A_PRESETUP                         0x501A
 #define HDMI_A_SRM_BASE                         0x5020
 
+/* Misc Mask Regigter for R-Car only */
+#define HDMI_MISC_MASK                          0x7D02
+
 /* I2C Master Registers (E-DDC) */
 #define HDMI_I2CM_SLAVE                         0x7E00
 #define HDMI_I2CM_ADDRESS                       0x7E01
@@ -534,6 +574,10 @@ enum {
 	HDMI_IH_PHY_STAT0_TX_PHY_LOCK = 0x2,
 	HDMI_IH_PHY_STAT0_HPD = 0x1,
 
+/* IH_I2CMPHY_STAT0 field values */
+	HDMI_IH_I2CMPHY_STAT0_I2CMPHYDONE = 0x2,
+	HDMI_IH_I2CMPHY_STAT0_I2CMPHYERROR = 0x1,
+
 /* IH_I2CM_STAT0 and IH_MUTE_I2CM_STAT0 field values */
 	HDMI_IH_I2CM_STAT0_DONE = 0x2,
 	HDMI_IH_I2CM_STAT0_ERROR = 0x1,
@@ -562,6 +606,9 @@ enum {
 	HDMI_IH_MUTE_AHBDMAAUD_STAT0_DONE = 0x04,
 	HDMI_IH_MUTE_AHBDMAAUD_STAT0_BUFFFULL = 0x02,
 	HDMI_IH_MUTE_AHBDMAAUD_STAT0_BUFFEMPTY = 0x01,
+
+/* IH_MUTE_PHY_STAT0 field values */
+	HDMI_IH_MUTE_PHY_STAT0_MASK = 0x3f,
 
 /* IH_MUTE field values */
 	HDMI_IH_MUTE_MUTE_WAKEUP_INTERRUPT = 0x2,
@@ -741,6 +788,11 @@ enum {
 	HDMI_FC_PRCONF_INCOMING_PR_FACTOR_OFFSET = 4,
 	HDMI_FC_PRCONF_OUTPUT_PR_FACTOR_MASK = 0x0F,
 	HDMI_FC_PRCONF_OUTPUT_PR_FACTOR_OFFSET = 0,
+
+/* FC_PACKET_TX_EN field values */
+	HDMI_FC_PACKET_TX_EN_DRM_MASK = 0x80,
+	HDMI_FC_PACKET_TX_EN_DRM_ENABLE = 0x80,
+	HDMI_FC_PACKET_TX_EN_DRM_DISABLE = 0x00,
 
 /* FC_AVICONF0-FC_AVICONF3 field values */
 	HDMI_FC_AVICONF0_PIX_FMT_MASK = 0x03,
@@ -946,6 +998,7 @@ enum {
 /* MC_SWRSTZ field values */
 	HDMI_MC_SWRSTZ_I2SSWRST_REQ = 0x08,
 	HDMI_MC_SWRSTZ_TMDSSWRST_REQ = 0x02,
+	HDMI_MC_SWRSTZ_TMDSSWRST_MASK = 0x02,
 
 /* MC_FLOWCTRL field values */
 	HDMI_MC_FLOWCTRL_FEED_THROUGH_OFF_MASK = 0x1,
@@ -1046,6 +1099,9 @@ enum {
 	HDMI_I2CM_CTLINT_NAC_MASK = 0x40,
 	HDMI_I2CM_CTLINT_ARB_POL = 0x8,
 	HDMI_I2CM_CTLINT_ARB_MASK = 0x4,
+
+/* I2CM_DIV field values */
+	HDMI_I2CM_DIV_FAST_STD_MODE_MASK = 0x08,
 };
 
 /*

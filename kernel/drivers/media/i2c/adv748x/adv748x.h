@@ -79,12 +79,14 @@ struct adv748x_csi2 {
 	unsigned int page;
 	unsigned int port;
 	unsigned int num_lanes;
+	unsigned int active_lanes;
 
 	struct media_pad pads[ADV748X_CSI2_NR_PADS];
 	struct v4l2_ctrl_handler ctrl_hdl;
 	struct v4l2_ctrl *pixel_rate;
 	struct v4l2_subdev *src;
 	struct v4l2_subdev sd;
+	unsigned int vc_ch;
 };
 
 #define notifier_to_csi2(n) container_of(n, struct adv748x_csi2, notifier)
@@ -208,6 +210,7 @@ struct adv748x_state {
 
 /* IO Map */
 #define ADV748X_IO_PD			0x00	/* power down controls */
+#define ADV748X_IO_PD_HDMI		BIT(5)
 #define ADV748X_IO_PD_RX_EN		BIT(6)
 
 #define ADV748X_IO_REG_01		0x01	/* pwrdn{2}b, prog_xtal_freq */
@@ -290,6 +293,7 @@ struct adv748x_state {
 #define ADV748X_SDP_INSEL		0x00	/* user_map_rw_reg_00 */
 
 #define ADV748X_SDP_VID_SEL		0x02	/* user_map_rw_reg_02 */
+#define ADV748X_SDP_VID_RESERVED_BIT	0x04
 #define ADV748X_SDP_VID_SEL_MASK	0xf0
 #define ADV748X_SDP_VID_SEL_SHIFT	4
 
@@ -394,10 +398,10 @@ int adv748x_write_block(struct adv748x_state *state, int client_page,
 
 #define io_read(s, r) adv748x_read(s, ADV748X_PAGE_IO, r)
 #define io_write(s, r, v) adv748x_write(s, ADV748X_PAGE_IO, r, v)
-#define io_clrset(s, r, m, v) io_write(s, r, (io_read(s, r) & ~m) | v)
+#define io_clrset(s, r, m, v) io_write(s, r, (io_read(s, r) & ~(m)) | (v))
 
 #define hdmi_read(s, r) adv748x_read(s, ADV748X_PAGE_HDMI, r)
-#define hdmi_read16(s, r, m) (((hdmi_read(s, r) << 8) | hdmi_read(s, r+1)) & m)
+#define hdmi_read16(s, r, m) (((hdmi_read(s, r) << 8) | hdmi_read(s, (r)+1)) & (m))
 #define hdmi_write(s, r, v) adv748x_write(s, ADV748X_PAGE_HDMI, r, v)
 
 #define repeater_read(s, r) adv748x_read(s, ADV748X_PAGE_REPEATER, r)
@@ -405,11 +409,11 @@ int adv748x_write_block(struct adv748x_state *state, int client_page,
 
 #define sdp_read(s, r) adv748x_read(s, ADV748X_PAGE_SDP, r)
 #define sdp_write(s, r, v) adv748x_write(s, ADV748X_PAGE_SDP, r, v)
-#define sdp_clrset(s, r, m, v) sdp_write(s, r, (sdp_read(s, r) & ~m) | v)
+#define sdp_clrset(s, r, m, v) sdp_write(s, r, (sdp_read(s, r) & ~(m)) | (v))
 
 #define cp_read(s, r) adv748x_read(s, ADV748X_PAGE_CP, r)
 #define cp_write(s, r, v) adv748x_write(s, ADV748X_PAGE_CP, r, v)
-#define cp_clrset(s, r, m, v) cp_write(s, r, (cp_read(s, r) & ~m) | v)
+#define cp_clrset(s, r, m, v) cp_write(s, r, (cp_read(s, r) & ~(m)) | (v))
 
 #define tx_read(t, r) adv748x_read(t->state, t->page, r)
 #define tx_write(t, r, v) adv748x_write(t->state, t->page, r, v)
@@ -441,5 +445,6 @@ int adv748x_csi2_set_pixelrate(struct v4l2_subdev *sd, s64 rate);
 
 int adv748x_hdmi_init(struct adv748x_hdmi *hdmi);
 void adv748x_hdmi_cleanup(struct adv748x_hdmi *hdmi);
+int adv748x_hdmi_set_resume_edid(struct adv748x_hdmi *hdmi);
 
 #endif /* _ADV748X_H_ */

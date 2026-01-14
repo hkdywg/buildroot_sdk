@@ -12,6 +12,12 @@
 
 #include "cc_driver.h"
 
+enum cc_secure_dir_type {
+	CC_NO_DMA_IS_SECURE = 0,
+	CC_SRC_DMA_IS_SECURE = 1,
+	CC_DST_DMA_IS_SECURE = 2
+};
+
 enum cc_req_dma_buf_type {
 	CC_DMA_BUF_NULL = 0,
 	CC_DMA_BUF_DLLI,
@@ -24,14 +30,15 @@ enum cc_sg_cpy_direct {
 };
 
 struct cc_mlli {
-	cc_sram_addr_t sram_addr;
+	u32 sram_addr;
+	unsigned int mapped_nents;
 	unsigned int nents; //sg nents
 	unsigned int mlli_nents; //mlli nents might be different than the above
 };
 
 struct mlli_params {
 	struct dma_pool *curr_pool;
-	u8 *mlli_virt_addr;
+	void *mlli_virt_addr;
 	dma_addr_t mlli_dma_addr;
 	u32 mlli_len;
 };

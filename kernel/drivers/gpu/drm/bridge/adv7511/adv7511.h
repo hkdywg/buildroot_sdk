@@ -272,6 +272,8 @@ enum adv7511_sync_polarity {
  * @sync_pulse:			Select the sync pulse
  * @vsync_polarity:		vsync input signal configuration
  * @hsync_polarity:		hsync input signal configuration
+ * @limit_vrefresh_option:	limit vrefresh option
+ * @limit_freq_option:		limit frequency option
  */
 struct adv7511_link_config {
 	unsigned int input_color_depth;
@@ -286,6 +288,9 @@ struct adv7511_link_config {
 	enum adv7511_input_sync_pulse sync_pulse;
 	enum adv7511_sync_polarity vsync_polarity;
 	enum adv7511_sync_polarity hsync_polarity;
+
+	unsigned int limit_vrefresh_option;
+	unsigned int limit_freq_option;
 };
 
 /**
@@ -320,6 +325,7 @@ struct adv7511_video_config {
 enum adv7511_type {
 	ADV7511,
 	ADV7533,
+	ADV7535,
 };
 
 #define ADV7511_MAX_ADDRS 3
@@ -355,6 +361,8 @@ struct adv7511 {
 	enum adv7511_sync_polarity vsync_polarity;
 	enum adv7511_sync_polarity hsync_polarity;
 	bool rgb;
+	unsigned int limit_vref;
+	unsigned int limit_freq;
 
 	struct gpio_desc *gpio_pd;
 
@@ -393,7 +401,6 @@ static inline int adv7511_cec_init(struct device *dev, struct adv7511 *adv7511)
 }
 #endif
 
-#ifdef CONFIG_DRM_I2C_ADV7533
 void adv7533_dsi_power_on(struct adv7511 *adv);
 void adv7533_dsi_power_off(struct adv7511 *adv);
 void adv7533_mode_set(struct adv7511 *adv, const struct drm_display_mode *mode);
@@ -402,44 +409,6 @@ int adv7533_patch_cec_registers(struct adv7511 *adv);
 int adv7533_attach_dsi(struct adv7511 *adv);
 void adv7533_detach_dsi(struct adv7511 *adv);
 int adv7533_parse_dt(struct device_node *np, struct adv7511 *adv);
-#else
-static inline void adv7533_dsi_power_on(struct adv7511 *adv)
-{
-}
-
-static inline void adv7533_dsi_power_off(struct adv7511 *adv)
-{
-}
-
-static inline void adv7533_mode_set(struct adv7511 *adv,
-				    const struct drm_display_mode *mode)
-{
-}
-
-static inline int adv7533_patch_registers(struct adv7511 *adv)
-{
-	return -ENODEV;
-}
-
-static inline int adv7533_patch_cec_registers(struct adv7511 *adv)
-{
-	return -ENODEV;
-}
-
-static inline int adv7533_attach_dsi(struct adv7511 *adv)
-{
-	return -ENODEV;
-}
-
-static inline void adv7533_detach_dsi(struct adv7511 *adv)
-{
-}
-
-static inline int adv7533_parse_dt(struct device_node *np, struct adv7511 *adv)
-{
-	return -ENODEV;
-}
-#endif
 
 #ifdef CONFIG_DRM_I2C_ADV7511_AUDIO
 int adv7511_audio_init(struct device *dev, struct adv7511 *adv7511);

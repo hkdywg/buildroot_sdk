@@ -2,16 +2,18 @@
 /*
  * rcar_du_encoder.c  --  R-Car Display Unit Encoder
  *
- * Copyright (C) 2013-2014 Renesas Electronics Corporation
+ * Copyright (C) 2013-2018 Renesas Electronics Corporation
  *
  * Contact: Laurent Pinchart (laurent.pinchart@ideasonboard.com)
  */
 
 #include <linux/export.h>
 
+#include <drm/drm_bridge.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_modeset_helper_vtables.h>
 #include <drm/drm_panel.h>
+#include <drm/drm_simple_kms_helper.h>
 
 #include "rcar_du_drv.h"
 #include "rcar_du_encoder.h"
@@ -21,13 +23,6 @@
 /* -----------------------------------------------------------------------------
  * Encoder
  */
-
-static const struct drm_encoder_helper_funcs encoder_helper_funcs = {
-};
-
-static const struct drm_encoder_funcs encoder_funcs = {
-	.destroy = drm_encoder_cleanup,
-};
 
 static unsigned int rcar_du_encoder_count_ports(struct device_node *node)
 {
@@ -43,7 +38,6 @@ static unsigned int rcar_du_encoder_count_ports(struct device_node *node)
 		if (of_node_name_eq(port, "port"))
 			num_ports++;
 	}
-
 	of_node_put(ports);
 
 	return num_ports;
@@ -84,8 +78,8 @@ int rcar_du_encoder_init(struct rcar_du_device *rcdu,
 			goto done;
 		}
 
-		bridge = devm_drm_panel_bridge_add(rcdu->dev, panel,
-						   DRM_MODE_CONNECTOR_DPI);
+		bridge = devm_drm_panel_bridge_add_typed(rcdu->dev, panel,
+							 DRM_MODE_CONNECTOR_DPI);
 		if (IS_ERR(bridge)) {
 			ret = PTR_ERR(bridge);
 			goto done;
@@ -93,8 +87,34 @@ int rcar_du_encoder_init(struct rcar_du_device *rcdu,
 	} else {
 		bridge = of_drm_find_bridge(enc_node);
 		if (!bridge) {
-			ret = -EPROBE_DEFER;
-			goto done;
+			if (output == RCAR_DU_OUTPUT_HDMI0 ||
+			    output == RCAR_DU_OUTPUT_HDMI1) {
+#if IS_ENABLED(CONFIG_DRM_RCAR_DW_HDMI)
+				ret = -EPROBE_DEFER;
+#else
+				ret = 0;
+#endif
+				goto done;
+			} else if (output == RCAR_DU_OUTPUT_LVDS0 ||
+				   output == RCAR_DU_OUTPUT_LVDS1) {
+#if IS_ENABLED(CONFIG_DRM_RCAR_LVDS)
+				ret = -EPROBE_DEFER;
+#else
+				ret = 0;
+#endif
+				goto done;
+			} else if (output == RCAR_DU_OUTPUT_MIPI_DSI0 ||
+				   output == RCAR_DU_OUTPUT_MIPI_DSI1) {
+#if IS_ENABLED(CONFIG_DRM_RCAR_MIPI_DSI)
+				ret = -EPROBE_DEFER;
+#else
+				ret = 0;
+#endif
+				goto done;
+			} else {
+				ret = -EPROBE_DEFER;
+				goto done;
+			}
 		}
 	}
 
@@ -109,18 +129,18 @@ int rcar_du_encoder_init(struct rcar_du_device *rcdu,
 		}
 	}
 
-	ret = drm_encoder_init(rcdu->ddev, encoder, &encoder_funcs,
-			       DRM_MODE_ENCODER_NONE, NULL);
+	renc->bridge = bridge;
+
+	ret = drm_simple_encoder_init(rcdu->ddev, encoder,
+				      DRM_MODE_ENCODER_NONE);
 	if (ret < 0)
 		goto done;
-
-	drm_encoder_helper_add(encoder, &encoder_helper_funcs);
 
 	/*
 	 * Attach the bridge to the encoder. The bridge will create the
 	 * connector.
 	 */
-	ret = drm_bridge_attach(encoder, bridge, NULL);
+	ret = drm_bridge_attach(encoder, bridge, NULL, 0);
 	if (ret) {
 		drm_encoder_cleanup(encoder);
 		return ret;

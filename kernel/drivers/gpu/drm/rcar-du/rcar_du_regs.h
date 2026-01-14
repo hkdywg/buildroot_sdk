@@ -197,6 +197,11 @@
 #define DEFR6_MLOS1		(1 << 2)
 #define DEFR6_DEFAULT		(DEFR6_CODE | DEFR6_TCNE1)
 
+#define DEFR7			0x000ec
+#define DEFR7_CODE		(0x7779 << 16)
+#define DEFR7_CMME1		BIT(6)
+#define DEFR7_CMME0		BIT(4)
+
 /* -----------------------------------------------------------------------------
  * R8A7790-only Control Registers
  */
@@ -282,7 +287,8 @@
  * isn't implemented by other SoC in the Gen3 family it can safely be set
  * unconditionally.
  */
-#define DPLLCR_PLCS0		(3 << 20)
+#define DPLLCR_PLCS0		(1 << 21)
+#define DPLLCR_PLCS0_H3ES1X_WA	(1 << 20)
 #define DPLLCR_CLKE		(1 << 18)
 #define DPLLCR_FDPLL(n)		((n) << 12)
 #define DPLLCR_N(n)		((n) << 5)

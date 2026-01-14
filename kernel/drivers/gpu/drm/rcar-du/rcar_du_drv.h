@@ -13,6 +13,7 @@
 #include <linux/kernel.h>
 #include <linux/wait.h>
 
+#include "rcar_cmm.h"
 #include "rcar_du_crtc.h"
 #include "rcar_du_group.h"
 #include "rcar_du_vsp.h"
@@ -28,6 +29,12 @@ struct rcar_du_encoder;
 #define RCAR_DU_FEATURE_VSP1_SOURCE	BIT(1)	/* Has inputs from VSP1 */
 #define RCAR_DU_FEATURE_INTERLACED	BIT(2)	/* HW supports interlaced */
 #define RCAR_DU_FEATURE_TVM_SYNC	BIT(3)	/* Has TV switch/sync modes */
+#define RCAR_DU_FEATURE_R8A7795_REGS	BIT(4)	/* Use R8A7795 registers */
+#define RCAR_DU_FEATURE_R8A7796_REGS	BIT(5)	/* Use R8A7796 registers */
+#define RCAR_DU_FEATURE_R8A77965_REGS	BIT(6)	/* Use R8A77965 registers */
+#define RCAR_DU_FEATURE_R8A77990_REGS	BIT(7)	/* Use R8A77990 registers */
+#define RCAR_DU_FEATURE_R8A77995_REGS	BIT(8)	/* Use R8A77995 registers */
+#define RCAR_DU_FEATURE_R8A779A0_REGS	BIT(9)  /* Use R8A779A0 registers */
 
 #define RCAR_DU_QUIRK_ALIGN_128B	BIT(0)	/* Align pitches to 128 bytes */
 
@@ -53,8 +60,11 @@ struct rcar_du_output_routing {
  * @channels_mask: bit mask of available DU channels
  * @routes: array of CRTC to output routes, indexed by output (RCAR_DU_OUTPUT_*)
  * @num_lvds: number of internal LVDS encoders
+ * @num_mipi_dsi: number of internal MIPI DSI device
  * @dpll_mask: bit mask of DU channels equipped with a DPLL
  * @lvds_clk_mask: bitmask of channels that can use the LVDS clock as dot clock
+ * @mipi_dsi_clk_mask: bitmask of channels that can use
+ *						the MIPI DSI clock as dot clock
  */
 struct rcar_du_device_info {
 	unsigned int gen;
@@ -63,8 +73,10 @@ struct rcar_du_device_info {
 	unsigned int channels_mask;
 	struct rcar_du_output_routing routes[RCAR_DU_OUTPUT_MAX];
 	unsigned int num_lvds;
+	unsigned int num_mipi_dsi;
 	unsigned int dpll_mask;
 	unsigned int lvds_clk_mask;
+	unsigned int mipi_dsi_clk_mask;
 };
 
 #define RCAR_DU_MAX_CRTCS		4
@@ -85,15 +97,22 @@ struct rcar_du_device {
 	struct rcar_du_encoder *encoders[RCAR_DU_OUTPUT_MAX];
 
 	struct rcar_du_group groups[RCAR_DU_MAX_GROUPS];
+	struct platform_device *cmms[RCAR_DU_MAX_CRTCS];
 	struct rcar_du_vsp vsps[RCAR_DU_MAX_VSPS];
 
 	struct {
+		struct drm_property *alpha;
 		struct drm_property *colorkey;
+		struct drm_property *colorkey_alpha;
 	} props;
 
 	unsigned int dpad0_source;
 	unsigned int dpad1_source;
 	unsigned int vspd1_sink;
+	bool vspdl_fix;
+	unsigned int brs_num;
+
+	bool mode_config_initialized;
 };
 
 static inline bool rcar_du_has(struct rcar_du_device *rcdu,

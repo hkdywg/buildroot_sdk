@@ -8,12 +8,13 @@
 #ifndef __SIMPLE_CARD_UTILS_H
 #define __SIMPLE_CARD_UTILS_H
 
+#include <linux/clk.h>
 #include <sound/soc.h>
 
 #define asoc_simple_init_hp(card, sjack, prefix) \
-	asoc_simple_init_jack(card, sjack, 1, prefix)
+	asoc_simple_init_jack(card, sjack, 1, prefix, NULL)
 #define asoc_simple_init_mic(card, sjack, prefix) \
-	asoc_simple_init_jack(card, sjack, 0, prefix)
+	asoc_simple_init_jack(card, sjack, 0, prefix, NULL)
 
 struct asoc_simple_dai {
 	const char *name;
@@ -130,7 +131,7 @@ int asoc_simple_parse_pin_switches(struct snd_soc_card *card,
 
 int asoc_simple_init_jack(struct snd_soc_card *card,
 			       struct asoc_simple_jack *sjack,
-			       int is_hp, char *prefix);
+			       int is_hp, char *prefix, char *pin);
 int asoc_simple_init_priv(struct asoc_simple_priv *priv,
 			       struct link_info *li);
 
@@ -163,8 +164,8 @@ static inline void asoc_simple_debug_dai(struct asoc_simple_priv *priv,
 		dev_dbg(dev, "%s tx slot mask = %d\n", name, dai->tx_slot_mask);
 	if (dai->rx_slot_mask)
 		dev_dbg(dev, "%s rx slot mask = %d\n", name, dai->rx_slot_mask);
-	//if (dai->clk)
-	//	dev_dbg(dev, "%s clk %luHz\n", name, clk_get_rate(dai->clk));
+	if (dai->clk)
+		dev_dbg(dev, "%s clk %luHz\n", name, clk_get_rate(dai->clk));
 }
 
 static inline void asoc_simple_debug_info(struct asoc_simple_priv *priv)
