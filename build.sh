@@ -25,7 +25,7 @@ function print_error()
 function build_usage()
 {
 	echo "Usage: "
-	echo ""$0"          - Show this menu"
+	echo ""$0"          	- Show this menu"
 	echo ""$0" lunch        - Select a project to update"
 	echo ""$0" [project]    - build [project] directly, support project as  follows:"
 
