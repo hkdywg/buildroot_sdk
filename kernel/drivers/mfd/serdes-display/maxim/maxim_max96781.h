@@ -21,7 +21,27 @@
 #define GPIO_F_REG(gpio)    (0x0205 + ((gpio) * 8))
 #define GPIO_G_REG(gpio)    (0x0206 + ((gpio) * 8))
 
+/* 000h */
+#define DEV_ADDR            GENMASK(7, 1)
+#define CFG_BLOCK           BIT(0)
+
+/* 0001h */
+#define IIC_2_EN            BIT(7)
+
+
+/* 0003h */
+#define IIC_SEL             BIT(4)
+#define RCLK_EN             BIT(3)
+#define RCLK_SEL            GENMASK(1, 0)
+
+/* 0004h */
+#define GMSL1_B             BIT(7)
+#define GMSL1_A             BIT(6)
+#define DIS_LOCAL_CC        BIT(4)
+
 /* 0005h */
+#define LOCK_EN             BIT(7)
+#define ERRB_EN             BIT(6)
 #define PU_LF3              BIT(3)
 #define PU_LF2              BIT(2)
 #define PU_LF1              BIT(1)
@@ -105,5 +125,34 @@
 
 /* 7074h */
 #define MAX_LINK_RATE       GENMASK(7, 0)
+
+enum max96781_gpio_list {
+    MAX96781_MFP0 = 0,
+    MAX96781_MFP1,
+    MAX96781_MFP2,
+    MAX96781_MFP3,
+    MAX96781_MFP4,
+    MAX96781_MFP5,
+    MAX96781_MFP6,
+    MAX96781_MFP7,
+    MAX96781_MFP8,
+    MAX96781_MFP9,
+    MAX96781_MFP10,
+    MAX96781_MFP11,
+    MAX96781_MFP12,
+    MAX96781_MFP13,
+    MAX96781_MFP14,
+    MAX96781_MFP15,
+    MAX96781_MFP16,
+    MAX96781_MFP17,
+    MAX96781_MFP18,
+    MAX96781_MFP19,
+    MAX96781_MFP20,
+    MAX96781_MFP21,
+    MAX96781_MFP22,
+    MAX96781_MFP23,
+    MAX96781_MFP24,
+    MAX96781_MFP25,
+};
 
 #endif

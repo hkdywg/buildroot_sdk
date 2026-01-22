@@ -41,9 +41,9 @@ static struct mipi_dsi_device *serdes_attach_dsi(struct serdes_bridge *serdes_br
         return dsi;
     }
 
-    dsi->lane = 4;
+    dsi->lanes = 4;
     dsi->format = MIPI_DSI_FMT_RGB888;
-    dsi->mode_flags = MIPI_DST_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE;
+    dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE;
     SERDES_DBG_MFD("%s: %s dsi_mode MIPI_DSI_MODE_VIDEO_SYNC_PULSE 0x%lx",
                    __func__, serdes->chip_data->name, dsi->mode_flags);
 
@@ -87,18 +87,18 @@ static int serdes_bridge_attach(struct drm_bridge *bridge,
     return ret;
 }
 
-static void serdes_bridge_datach(struct drm_bridge *bridge)
+static void serdes_bridge_detach(struct drm_bridge *bridge)
 {
 
 }
 
 static void serdes_detach_dsi(struct serdes_bridge *serdes_bridge)
 {
-    mipi_dsi_datach(serdes_bridge->dsi);
+    mipi_dsi_detach(serdes_bridge->dsi);
     mipi_dsi_device_unregister(serdes_bridge->dsi);
 }
 
-static void serde_bridge_disable(struct drm_bridge *bridge)
+static void serdes_bridge_disable(struct drm_bridge *bridge)
 {
     struct serdes_bridge *serdes_bridge = to_serdes_bridge(bridge);
     struct serdes *serdes = serdes_bridge->parent;
@@ -115,7 +115,7 @@ static void serde_bridge_disable(struct drm_bridge *bridge)
     SERDES_DBG_MFD("%s: ret = %d\n", __func__, ret);
 }
 
-static void serde_bridge_post_disable(struct drm_bridge *bridge)
+static void serdes_bridge_post_disable(struct drm_bridge *bridge)
 {
     struct serdes_bridge *serdes_bridge = to_serdes_bridge(bridge);
     struct serdes *serdes = serdes_bridge->parent;
@@ -132,7 +132,7 @@ static void serde_bridge_post_disable(struct drm_bridge *bridge)
     SERDES_DBG_MFD("%s: ret = %d\n", __func__, ret);
 }
 
-static void serde_bridge_enable(struct drm_bridge *bridge)
+static void serdes_bridge_enable(struct drm_bridge *bridge)
 {
     struct serdes_bridge *serdes_bridge = to_serdes_bridge(bridge);
     struct serdes *serdes = serdes_bridge->parent;
@@ -154,7 +154,7 @@ static void serde_bridge_enable(struct drm_bridge *bridge)
                     serdes->chip_data->name, ret);
 }
 
-static void serde_bridge_pre_enable(struct drm_bridge *bridge)
+static void serdes_bridge_pre_enable(struct drm_bridge *bridge)
 {
     struct serdes_bridge *serdes_bridge = to_serdes_bridge(bridge);
     struct serdes *serdes = serdes_bridge->parent;
@@ -231,7 +231,7 @@ static const struct drm_bridge_funcs serdes_bridge_funcs = {
     .enable = serdes_bridge_enable,
     .detect = serdes_bridge_detect,
     .get_modes = serdes_bridge_get_modes,
-    .atomic_get_input_bus_fmts = drm_atomic_helper_bridge_propagete_bus_fmt,
+    .atomic_get_input_bus_fmts = drm_atomic_helper_bridge_propagate_bus_fmt,
     .atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
     .atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
     .atomic_reset = drm_atomic_helper_bridge_reset,
@@ -307,9 +307,9 @@ static int serdes_bridge_probe(struct platform_device *pdev)
     return 0;
 }
 
-static serdes_bridge_remove(struct platform_device *pdev)
+static int serdes_bridge_remove(struct platform_device *pdev)
 {
-    struct serdes_bridge *serdes_bridge = pltform_get_drvdata(pdev);
+    struct serdes_bridge *serdes_bridge = platform_get_drvdata(pdev);
 
     if(serdes_bridge->sel_mipi)
         serdes_detach_dsi(serdes_bridge);
@@ -346,8 +346,9 @@ static void __exit serdes_bridge_exit(void)
 {
     platform_driver_unregister(&serdes_bridge_driver);
 }
-module_exit(serdes_bridge_driver)
+module_exit(serdes_bridge_exit);
 
 MODULE_AUTHOR("weigenyin");
 MODULE_DESCRIPTION("display bridge interface for different serdes");
 MODULE_LICENSE("GPL");
+

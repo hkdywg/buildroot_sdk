@@ -7,6 +7,8 @@
 * Author: weigenyin <weigenyin@zjautomotive.com>
 *
 */
+#include "display_serdes_core.h"
+
 
 static const struct mfd_cell serdes_max96781_devs[] = {
     {
@@ -110,7 +112,7 @@ int serdes_multi_reg_write(struct serdes *serdes, const struct reg_sequence *reg
 }
 EXPORT_SYMBOL_GPL(serdes_multi_reg_write);
 
-int serdes_bulk_write(struct serdes *serdes, unsigned int reg, int count, void *src)
+int serdes_bulk_write(struct serdes *serdes, unsigned int reg, int num_regs, void *src)
 {
     u16 *buf = src;
     int i, ret;

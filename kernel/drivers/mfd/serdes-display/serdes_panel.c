@@ -132,7 +132,7 @@ static const struct drm_panel_funcs serdes_panel_funcs = {
     .prepare = serdes_panel_prepare,
     .unprepare = serdes_panel_unprepare,
     .enable = serdes_panel_enable,
-    .display = serdes_panel_disable,
+    .disable = serdes_panel_disable,
     .get_modes = serdes_panel_get_modes,
 };
 

@@ -25,7 +25,7 @@ static irqreturn_t serdes_bridge_lock_irq_handler(int irq, void *arg)
     return IRQ_HANDLED;
 }
 
-static irqreturn_t serdes_bridge_lock_irq_handler(int irq, void *arg)
+static irqreturn_t serdes_bridge_err_irq_handler(int irq, void *arg)
 {
     struct serdes *serdes = arg;
     int ret;

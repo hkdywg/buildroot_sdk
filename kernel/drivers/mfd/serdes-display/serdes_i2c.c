@@ -17,6 +17,12 @@ static void serdes_i2c_shutdown(struct i2c_client *client)
     serdes_device_shutdown(serdes);
 }
 
+static void serdes_reg_check_work_free(struct serdes *serdes)
+{
+    kthread_cancel_delayed_work_sync(&serdes->reg_check_work);
+    kthread_destroy_worker(serdes->kworker);
+}
+
 static void serdes_i2c_remove(struct i2c_client *client)
 {
     struct device *dev = &client->dev;
@@ -40,15 +46,23 @@ static int serdes_i2c_prepare(struct device *dev)
     return 0;
 }
 
-static int serdes_i2c_resume(struct device *dev)
+static void serdes_i2c_complete(struct device *dev)
 {
     struct serdes *serdes = dev_get_drvdata(dev);
 
-    if(serdes->chip_data->serdes_type == TYPE_OTHER)
+    if (serdes->chip_data->serdes_type == TYPE_SER)
         serdes_i2c_set_sequence(serdes);
 
-    serdes_device_resume(serdes);
+    atomic_set(&serdes->flag_early_suspend, 0);
+}
 
+static int serdes_i2c_suspend(struct device *dev)
+{
+    struct serdes *serdes = dev_get_drvdata(dev);
+
+    serdes_device_suspend(serdes);
+
+    SERDES_DBG_MFD("%s: name=%s\n", __func__, dev_name(serdes->dev));
     return 0;
 }
 
@@ -101,6 +115,19 @@ static int serdes_i2c_set_sequence(struct serdes *serdes)
     return ret;
 }
 
+static int serdes_i2c_resume(struct device *dev)
+{
+    struct serdes *serdes = dev_get_drvdata(dev);
+
+    if(serdes->chip_data->serdes_type == TYPE_OTHER)
+        serdes_i2c_set_sequence(serdes);
+
+    serdes_device_resume(serdes);
+
+    return 0;
+}
+
+
 static int serdes_i2c_set_sequence_backup(struct serdes *serdes)
 {
     struct device *dev = serdes->dev;
@@ -141,12 +168,12 @@ static int serdes_i2c_set_sequence_backup(struct serdes *serdes)
     return ret;
 }
 
-static serdes_i2c_backup_register(struct serdes *serdes)
+static int serdes_i2c_backup_register(struct serdes *serdes)
 {
     int i;
 
     for(i = 0; i < serdes->serdes_backup_seq->reg_seq_cnt; i++) {
-        if(serdes->serdes_backup_seq->req_sequence[i].reg == 0xffff)
+        if(serdes->serdes_backup_seq->reg_sequence[i].reg == 0xffff)
             continue;
         serdes_reg_read(serdes, serdes->serdes_backup_seq->reg_sequence[i].reg,
                         &serdes->serdes_backup_seq->reg_sequence[i].def);
@@ -254,13 +281,10 @@ static int serdes_reg_check_work_setup(struct serdes *serdes)
     atomic_set(&serdes->flag_early_suspend, 0);
     kthread_queue_delayed_work(serdes->kworker, &serdes->reg_check_work,
                                msecs_to_jiffies(20000));
+
+	return 0;
 }
 
-static void serdes_reg_check_work_free(struct serdes *serdes)
-{
-    kthread_cancel_delayed_work_sync(&serdes->reg_check_work);
-    kthread_destroy_worker(serdes->kworker);
-}
 
 static void serdes_mfd_work(struct work_struct *work)
 {
@@ -294,7 +318,7 @@ static int serdes_parse_init_seq(struct device *dev, const u16 *data,
     cnt = length / 4;
     seq->reg_seq_cnt = cnt;
 
-    seq->reg_sequence = devm_kcalloc(dev, cnt, sizeof(struct reg_sequence), GPF_KERNEL);
+    seq->reg_sequence = devm_kcalloc(dev, cnt, sizeof(struct reg_sequence), GFP_KERNEL);
     if(!seq->reg_sequence)
         return -ENOMEM;
 
@@ -446,11 +470,13 @@ static int serdes_i2c_probe(struct i2c_client *client,
 }
 
 
-static const struct of_device_id serdes_of_match = {
+static const struct of_device_id serdes_of_match[] = {
     { .compatible = "maxim,max96781",   .data = &serdes_max96781_data   },
+#if 0
     { .compatible = "ti,ds90uh981",     .data = &serdes_ds90uh981_data  },
     { .compatible = "ti,ds90uh983",     .data = &serdes_ds90uh983_data  },
     { .compatible = "aim,aim951X",      .data = &serdes_aim951x_data    },
+#endif
     {  }
 };
 
