@@ -23,11 +23,30 @@ _build_sh_completion() {
         # Relative path without ./, try to resolve
         if [ -f "./${script_path}" ]; then
             script_path="${PWD}/${script_path}"
+            echo "2"
         elif command -v "$script_path" >/dev/null 2>&1; then
             # If it's in PATH, get its location
             script_path=$(command -v "$script_path")
+            echo "3"
         fi
+        echo "4"
     fi
+
+    # Method 1: If script path exists and is a file 
+    if [ -f "$script_path" ]; then 
+        script_dir=$(cd -- "$(dirname -- "$script_path")" &> /dev/null && pwd) 
+    # Method 2: Try current directory 
+    elif [ -f "./build.sh" ]; then 
+        script_dir=$(pwd) 
+    # Method 3: Try relative to completion script location 
+    elif [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]%/*}/build.sh" ]; then 
+        script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd) 
+    # Method 4: Last resort - use current directory 
+    else 
+        script_dir=$(pwd) 
+    fi
+    
+    #script_dir=$(cd -- "$(dirname -- "${script_path}")" && pwd)
 
     # Get available projects from device directory (same logic as build.sh)
     local projects
@@ -40,6 +59,7 @@ _build_sh_completion() {
     
     # First argument: project name or "lunch"
     if [ $cword -eq 1 ]; then
+        #echo "curent scripts dir is : ${script_dir} --"
         local options="lunch"
         if [ -n "$projects" ]; then
             options="$options $projects"
