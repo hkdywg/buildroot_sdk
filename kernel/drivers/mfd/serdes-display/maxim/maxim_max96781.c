@@ -456,7 +456,7 @@ max96781_bridge_detect(struct serdes *serdes)
         SERDES_DBG_CHIP("4 status = %d state = %d\n", status, serdes->extcon->state);
     }
 
-    if(serdes_bridge->next_bridge && (serdes->next_bridge->ops & DRM_BRIDGE_OP_DETECT))
+    if(serdes_bridge->next_bridge && (serdes_bridge->next_bridge->ops & DRM_BRIDGE_OP_DETECT))
         return drm_bridge_detect(serdes_bridge->next_bridge);
 
 out:

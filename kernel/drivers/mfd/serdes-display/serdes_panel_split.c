@@ -246,7 +246,7 @@ static int serdes_panel_split_remove(struct platform_device *pdev)
     if(backlight)
         put_device(&backlight->dev);
 
-    drm_panel_remove(&serdes_panel_split->dev);
+    drm_panel_remove(&serdes_panel_split->panel);
 
     return 0;
 }

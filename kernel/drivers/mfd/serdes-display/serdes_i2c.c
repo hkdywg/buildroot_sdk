@@ -9,6 +9,48 @@
 */
 #include "display_serdes_core.h"
 
+static struct serdes *g_serdes_ser_split[MAX_NUM_SERDES_SPLIT];
+
+int serdes_i2c_set_sequence(struct serdes *serdes)
+{
+    struct device *dev = serdes->dev;
+    int i, ret;
+    unsigned int def;
+
+    for(i = 0; i < serdes->serdes_init_seq->reg_seq_cnt; i++) {
+        if(serdes->serdes_init_seq->reg_sequence[i].reg == 0xffff) {
+            udelay(serdes->serdes_init_seq->reg_sequence[i].def);
+            continue;
+        }
+
+        ret = serdes_reg_write(serdes,
+                        serdes->serdes_init_seq->reg_sequence[i].reg,
+                        serdes->serdes_init_seq->reg_sequence[i].def);
+        if(ret < 0) {
+            dev_warn(dev, "%s failed to write reg %04x, ret %d, again now\n",
+                     dev_name(serdes->dev),
+                     serdes->serdes_init_seq->reg_sequence[i].reg, ret);
+            ret = serdes_reg_write(serdes,
+                            serdes->serdes_init_seq->reg_sequence[i].reg,
+                            serdes->serdes_init_seq->reg_sequence[i].def);
+        }
+        serdes_reg_read(serdes, serdes->serdes_init_seq->reg_sequence[i].reg, &def);
+        if((def !=  serdes->serdes_init_seq->reg_sequence[i].def) || (ret < 0)) {
+            /* if read value != write value then write again */
+            dev_err(dev, "read %04x %04x != %04x\n",
+                    serdes->serdes_init_seq->reg_sequence[i].reg,
+                    def, serdes->serdes_init_seq->reg_sequence[i].def);
+            ret = serdes_reg_write(serdes,
+                            serdes->serdes_init_seq->reg_sequence[i].reg,
+                            serdes->serdes_init_seq->reg_sequence[i].def);
+        }
+    }
+
+    dev_info(dev, "serdes %s sequence_init\n", serdes->chip_data->name);
+
+    return ret;
+}
+
 static void serdes_i2c_shutdown(struct i2c_client *client)
 {
     struct device *dev = &client->dev;
@@ -75,46 +117,6 @@ static int serdes_i2c_poweroff(struct device *dev)
     return 0;
 }
 
-static int serdes_i2c_set_sequence(struct serdes *serdes)
-{
-    struct device *dev = serdes->dev;
-    int i, ret;
-    unsigned int def;
-
-    for(i = 0; i < serdes->serdes_init_seq->reg_seq_cnt; i++) {
-        if(serdes->serdes_init_seq->reg_sequence[i].reg == 0xffff) {
-            udelay(serdes->serdes_init_seq->reg_sequence[i].def);
-            continue;
-        }
-
-        ret = serdes_reg_write(serdes,
-                        serdes->serdes_init_seq->reg_sequence[i].reg,
-                        serdes->serdes_init_seq->reg_sequence[i].def);
-        if(ret < 0) {
-            dev_warn(dev, "%s failed to write reg %04x, ret %d, again now\n",
-                     dev_name(serdes->dev),
-                     serdes->serdes_init_seq->reg_sequence[i].reg, ret);
-            ret = serdes_reg_write(serdes,
-                            serdes->serdes_init_seq->reg_sequence[i].reg,
-                            serdes->serdes_init_seq->reg_sequence[i].def);
-        }
-        serdes_reg_read(serdes, serdes->serdes_init_seq->reg_sequence[i].reg, &def);
-        if((def !=  serdes->serdes_init_seq->reg_sequence[i].def) || (ret < 0)) {
-            /* if read value != write value then write again */
-            dev_err(dev, "read %04x %04x != %04x\n",
-                    serdes->serdes_init_seq->reg_sequence[i].reg,
-                    def, serdes->serdes_init_seq->reg_sequence[i].def);
-            ret = serdes_reg_write(serdes,
-                            serdes->serdes_init_seq->reg_sequence[i].reg,
-                            serdes->serdes_init_seq->reg_sequence[i].def);
-        }
-    }
-
-    dev_info(dev, "serdes %s sequence_init\n", serdes->chip_data->name);
-
-    return ret;
-}
-
 static int serdes_i2c_resume(struct device *dev)
 {
     struct serdes *serdes = dev_get_drvdata(dev);
@@ -126,7 +128,6 @@ static int serdes_i2c_resume(struct device *dev)
 
     return 0;
 }
-
 
 static int serdes_i2c_set_sequence_backup(struct serdes *serdes)
 {
@@ -446,6 +447,37 @@ static int serdes_i2c_probe(struct i2c_client *client,
         return ret;
     }
 
+    of_property_read_u32(dev->of_node, "id-serdes-bridge-split",
+                 &serdes->id_serdes_bridge_split);
+    if ((serdes->id_serdes_bridge_split < MAX_NUM_SERDES_SPLIT) && (serdes->type == TYPE_SER)) {
+        g_serdes_ser_split[serdes->id_serdes_bridge_split] = serdes;
+        SERDES_DBG_MFD("%s: %s-%s g_serdes_split[%d]=0x%p\n", __func__,
+                   dev_name(serdes->dev), serdes->chip_data->name,
+                   serdes->id_serdes_bridge_split, serdes);
+    }
+
+    of_property_read_u32(dev->of_node, "reg-hw", &serdes->reg_hw);
+    of_property_read_u32(dev->of_node, "reg", &serdes->reg_use);
+    of_property_read_u32(dev->of_node, "link", &serdes->link_use);
+    of_property_read_u32(dev->of_node, "id-serdes-panel-split", &serdes->id_serdes_panel_split);
+    if ((serdes->id_serdes_panel_split) && (serdes->type == TYPE_DES)) {
+        serdes->g_serdes_bridge_split = g_serdes_ser_split[serdes->id_serdes_panel_split];
+        SERDES_DBG_MFD("%s: id=%d p=0x%p\n", __func__,
+                   serdes->id_serdes_panel_split, serdes->g_serdes_bridge_split);
+    }
+
+    if (serdes->reg_hw) {
+        SERDES_DBG_MFD("%s: %s start change i2c address from 0x%x to 0x%x\n",
+                   __func__, dev->of_node->name, serdes->reg_hw, serdes->reg_use);
+
+        if (!serdes->route_enable) {
+            ret = serdes_set_i2c_address(serdes, serdes->reg_hw,
+                             serdes->reg_use, serdes->link_use);
+            if (ret)
+                dev_err(dev, "%s failed to set addr\n", serdes->chip_data->name);
+        }
+    }
+
     serdes->use_delay_work = of_property_read_bool(dev->of_node, "user-delay-work");
     if(serdes->use_delay_work) {
         serdes->mfd_wq = alloc_ordered_workqueue("%s",
@@ -469,6 +501,7 @@ static int serdes_i2c_probe(struct i2c_client *client,
     return 0;
 }
 
+extern struct max96781_data serdes_max96781_data;
 
 static const struct of_device_id serdes_of_match[] = {
     { .compatible = "maxim,max96781",   .data = &serdes_max96781_data   },

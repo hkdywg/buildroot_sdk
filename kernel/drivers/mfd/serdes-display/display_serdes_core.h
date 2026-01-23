@@ -63,6 +63,7 @@
 #include <linux/pinctrl/pinconf.h>
 #include <linux/pinctrl/pinmux.h>
 #include <linux/types.h>
+#include <asm/unaligned.h>
 
 #include "../../../../drivers/pinctrl/core.h"
 #include "../../../../drivers/pinctrl/pinconf.h"

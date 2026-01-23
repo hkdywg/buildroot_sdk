@@ -135,7 +135,7 @@ int serdes_bulk_write(struct serdes *serdes, unsigned int reg, int num_regs, voi
 }
 EXPORT_SYMBOL_GPL(serdes_bulk_write);
 
-int serdes_set_bit(struct serdes *serdes, unsigned int reg, 
+int serdes_set_bits(struct serdes *serdes, unsigned int reg, 
             unsigned int mask, unsigned int val)
 {
     int ret;
@@ -146,7 +146,7 @@ int serdes_set_bit(struct serdes *serdes, unsigned int reg,
 
     return ret;
 }
-EXPORT_SYMBOL_GPL(serdes_set_bit);
+EXPORT_SYMBOL_GPL(serdes_set_bits);
 
 int serdes_device_init(struct serdes *serdes)
 {
