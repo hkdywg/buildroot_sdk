@@ -53,6 +53,12 @@ function build_kernel_dtb()
     make kernel_dtb || return $?
 }
 
+function build_kernel_driver()
+{
+    cd ${BUILD_PATH} || return
+    make kernel_driver || return $?
+}
+
 function build_rootfs()
 {
 	cd ${BUILD_PATH} || return

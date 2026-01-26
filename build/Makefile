@@ -166,6 +166,7 @@ DTB_D_TMP := $(patsubst %.dts,%.dtb.dts.tmp,$(notdir $(DTS_SOURCES)))
 DTB_TARGET := $(patsubst %.dts,%.dtb,$(notdir $(DTS_SOURCES)))
 
 kernel_dtb:
+	$(call print_target)
 	@mkdir -p $(KERNEL_DTB_BUILD_PATH)
 	@$(DTB_HOST_CC) -E $(DTB_CFLAGS)$(KERNEL_DTB_BUILD_PATH)/$(DTB_D_PRE_TMP) -nostdinc -I$(KERNEL_DTB_PATH)/include-prefixes \
 		-I$(KERNEL_DTB_PATH)/include $(DTC_DEF) -o $(KERNEL_DTB_BUILD_PATH)/$(DTB_D_TMP) $(DTS_SOURCES)
@@ -174,6 +175,23 @@ kernel_dtb:
 clean:
 	@rm -rf $(KERNEL_DTB_BUILD_PATH)/*
 
+########################################################################
+# kernel driver
+########################################################################
+KERNEL_DRIVER_DIR := $(shell find $(KERNEL_DRIVER_PATH) -maxdepth 1 -type d)
+KERNEL_DRIVER_SUBDIRS := $(basename $(patsubst ./%,%,$(KERNEL_DRIVER_DIR)))
+
+define build_sub_drivers
+for dir in $(KERNEL_DRIVER_SUBDIRS); \
+	do \
+	$(MAKE) -C $$dir all; \
+	done
+endef
+
+kernel_driver:export INSTALL_MOD_PATH=${KERNEL_BUILD_PATH}/modules
+kernel_driver: 
+	$(call print_target)
+	@$(build_sub_drivers)
 
 ########################################################################
 # boot targets
