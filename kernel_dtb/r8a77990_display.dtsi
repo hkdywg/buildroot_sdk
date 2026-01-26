@@ -1,0 +1,247 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Device Tree Source for the r8a77990 display
+ *
+ * @Copyright Copyright (c) 2022 Jiangsu New Vision Automotive Electronics Co.
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	lvds0 {
+		compatible = "panel-lvds";
+		width-mm = <210>;
+		height-mm = <158>;
+
+		data-mapping = "jeida-24";
+		//data-mapping = "vesa-24";
+
+        panel-timing {
+            clock-frequency = <25000000>;
+            hactive = <800>;
+            vactive = <480>;
+            hsync-len = <14>;
+            hfront-porch = <20>;
+            hback-porch = <20>;
+            vfront-porch = <4>;
+            vback-porch = <4>;
+            vsync-len = <2>;
+            hsync-active = <1>;                                
+            vsync-active = <1>;                                
+        };
+
+		port {
+			lvds0_panel_in: endpoint {
+				remote-endpoint = <&lvds0_out>;
+			};
+		};
+	};
+
+	lvds1 {
+		compatible = "panel-lvds";
+
+		width-mm = <210>;
+		height-mm = <158>;
+
+		data-mapping = "jeida-24";
+		//data-mapping = "vesa-24";
+
+        panel-timing {
+            clock-frequency = <25000000>;
+            hactive = <800>;
+            vactive = <480>;
+            hsync-len = <14>;
+            hfront-porch = <20>;
+            hback-porch = <20>;
+            vfront-porch = <4>;
+            vback-porch = <4>;
+            vsync-len = <2>;
+            hsync-active = <1>;                                
+            vsync-active = <1>;                                
+        };
+
+		port {
+			lvds1_panel_in: endpoint {
+				remote-endpoint = <&lvds1_out>;
+			};
+		};
+	};
+};
+
+&i2c0 {
+    status = "okay";
+    clock-frequency = <400000>;
+
+    i2c0_max96781: i2c0-max96781@40 {
+        compatible = "maxim,max96781";
+        status = "okay";
+        reg = <0x40>;
+        #address-cells = <1>;
+        #size-cells = <0>;
+        pinctrl-names = "default";
+        lock-gpios = <&gpio1 17 GPIO_ACTIVE_HIGH>;
+        err-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+
+        serdes-init-sequence = [
+            // pipe_x stream 0
+            00A3 0000
+            // pipe_y stream 1
+            00a7 0001
+            // route video source X and Y to output pipe Y
+            2326 0000
+            // profile cfg for port B
+            3301 000b
+            // trigger profile setup execution for port B
+            3303 0082
+        ];
+
+        i2c0_max96781_pinctrl: i2c0-max96781-pinctrl {
+            compatible = "maxim,max96781-pinctrl";
+            pinctrl-names = "default";
+            pinctrl-0 = <&i2c0_max96781_pinctrl_pins>;
+            status = "okay";
+
+            i2c0_max96781_pinctrl_pins: pinctrl-pins {
+                i2c {
+                    groups = "MAX96781_I2C";
+                    function = "MAX96781_I2C";
+                };
+                /*
+                lcd-bl-pwd {
+                    pins = "MAX96781_MFP0";
+                    function = "SER_TXID4_TO_DES_LINKA";
+                };
+                */
+            };
+            
+            i2c0_max96781_gpio: i2c0-max96781-gpio {
+                compatible = "maxim, max96781-gpio";
+                status = "okay";
+
+                gpio-controller;
+                #gpio-cells = <2>;
+                gpio-ranges = <&i2c0_max96781_pinctrl 0 471 23>;
+            };
+        };
+
+        i2c0_max96781_bridge: i2c0-max96781-bridge {
+            compatible = "maxim,max96781-bridge";
+            status = "okay";
+        };
+		/*
+        ports {
+            #address-cells = <1>;
+            #size-cells = <0>;
+
+            port@0 {
+                reg = <0>;
+                i2c0_max96781_from_lvds0: endpoint {
+                    remote-endpoint = <&lvds0_panel_in>;
+                };
+            };
+
+			port@1 {
+				reg = <1>;
+				i2c0_max96781_out: endpoint {
+					remote-endpoint = <&i2c0_max96752_from_max96781>;
+				};
+			};
+        };
+		*/
+	};
+
+	i2c0_max96752: i2c0-max96752@4a {
+		compatible = "maxim,max96752";
+		reg = <0x4a>;
+		#address-celss = <1>;
+		#size-celss = <0>;
+		//id-serdes-panel-split = <0x02>;
+		link = <0x01>;
+		status = "okay";
+		
+		serdes-init-sequence = [
+			// port A output, format VESA, Split with DE
+			01ce 0046
+		];
+
+		i2c0_max96752_pinctrl: i2c0-max96752-pinctrl {
+			compatible = "maxim,max96752-pinctrl";
+			status = "okay";
+
+			pinctrl-names = "default","init","sleep";
+			pinctrl-0 = "i2c0_max96752_panel_pins";
+			pinctrl-1 = "i2c0_max96752_panel_pins";
+			pinctrl-2 = "i2c0_max96752_panel_sleep_pins";
+		
+			i2c0_max96752_panel_pins: panel-pins {
+				lcd-rst-pin {
+					pins = "MAX96752_GPIO10";
+					function = "DES_TXID10_OUTPUT_HIGH";
+				};
+				tp-rst {
+					pins = "MAX96752_GPIO5";
+					function = "DES_TXID5_OUTPUT_HIGH";
+				};
+				lcd-pwr-on {
+					pins = "MAX96752_GPIO3";
+					function = "DES_TXID3_OUTPUT_HIGH";
+				};
+				lcd-bl-pwd {
+					pins = "MAX96752_GPIO4";
+					function = "SER_TO_DES_RXID4";
+				};
+			};
+
+			i2c0_max96752_panel_sleep_pins: panel-sleep-pins {
+				lcd-rst-pin {
+					pins = "MAX96752_GPIO10";
+					function = "DES_TXID10_OUTPUT_LOW";
+				};
+				tp-rst {
+					pins = "MAX96752_GPIO5";
+					function = "DES_TXID5_OUTPUT_LOW";
+				};
+				lcd-pwr-on {
+					pins = "MAX96752_GPIO3";
+					function = "DES_TXID3_OUTPUT_LOW";
+				};
+			};
+
+			i2c0_max96752_gpio: i2c0-max96752-gpio {
+				compatible = "maxim,max96752-gpio";
+				status = "okay";
+
+				gpio-controller;
+				#gpio-cells = <2>;
+				#gpio-ranges = <&i2c0_max96752_pinctrl 0 250 15>;
+			};
+		};
+		
+		i2c0_max96752_panel: i2c0-max96752-panel {
+			compatible = "maxim,max96752-panel";
+			status = "okay";
+
+			panel-timing {
+				clock-frequency = <25000000>;
+				hactive = <800>;
+				vactive = <480>;
+				hsync-len = <14>;
+				hfront-porch = <20>;
+				hback-porch = <20>;
+				vfront-porch = <4>;
+				vback-porch = <4>;
+				vsync-len = <2>;
+				hsync-active = <1>;                                
+				vsync-active = <1>;                                
+			};
+			/*
+			port {
+				i2c0_max96752_from_max96781: endpoint {
+					remote-endpoint = <&i2c0_max96781_out>;
+				};
+			};	
+			*/
+		};
+	};
+};
+
