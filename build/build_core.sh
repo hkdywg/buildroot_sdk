@@ -47,6 +47,12 @@ function build_kernel()
 	make kernel || return $?
 }
 
+function build_kernel_dtb()
+{
+    cd ${BUILD_PATH} || return
+    make kernel_dtb || return $?
+}
+
 function build_rootfs()
 {
 	cd ${BUILD_PATH} || return

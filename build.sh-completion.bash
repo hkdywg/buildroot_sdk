@@ -55,7 +55,7 @@ _build_sh_completion() {
     fi
 
     # Supported subtargets (must match build.sh)
-    local subtargets="uboot kernel rootfs boot gpt system"
+    local subtargets="uboot kernel kernel_dtb rootfs boot gpt system"
     
     # First argument: project name or "lunch"
     if [ $cword -eq 1 ]; then

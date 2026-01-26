@@ -144,6 +144,36 @@ kernel-clean:
 	${Q}rm -f ${KERNEL_BUILD_PATH}/elf/vmlinux
 	${Q}$(if $(wildcard ${INSTALL_MODE_PATH}), rm -rf ${INSTALL_MODE_PATH},)
 
+########################################################################
+# kernel dtb
+########################################################################
+DTB_HOST_CC := gcc
+HOST_DTC := dtc
+
+DTB_CFLAGS := -E -Wp,-MMD,
+
+DTC_FLAGS := 0 -Wno-unit_address_vs_reg -Wno-unit_address_format \
+			 -Wno-avoid_unnecessary_addr_size -Wno-alias_paths -Wno-graph_child_address \
+			 -Wno-simple_bus_reg -Wno-unique_unit_address -Wno-pci_device_reg
+
+DTC_DEF := -undef -D__DTS__ -x assembler-with-cpp
+
+DTS_SOURCES := $(wildcard $(KERNEL_DTB_PATH)/*.dts)                                                                    
+DTB_D_PRE_TMP := $(patsubst %.dts,%.dtb.d.pre.tmp,$(notdir $(DTS_SOURCES)))
+DTB_DTS_TMP := $(patsubst %.dts,%.dtb.dts.tmp,$(notdir $(DTS_SOURCES)))
+DTB_D_DTC_TMP := $(patsubst %.dts,%.dtb.d.dtc.tmp,$(notdir $(DTS_SOURCES)))
+DTB_D_TMP := $(patsubst %.dts,%.dtb.dts.tmp,$(notdir $(DTS_SOURCES)))
+DTB_TARGET := $(patsubst %.dts,%.dtb,$(notdir $(DTS_SOURCES)))
+
+kernel_dtb:
+	@mkdir -p $(KERNEL_DTB_BUILD_PATH)
+	@$(DTB_HOST_CC) -E $(DTB_CFLAGS)$(KERNEL_DTB_BUILD_PATH)/$(DTB_D_PRE_TMP) -nostdinc -I$(KERNEL_DTB_PATH)/include-prefixes \
+		-I$(KERNEL_DTB_PATH)/include $(DTC_DEF) -o $(KERNEL_DTB_BUILD_PATH)/$(DTB_D_TMP) $(DTS_SOURCES)
+	@$(HOST_DTC) -O dtb -o $(KERNEL_DTB_BUILD_PATH)/$(DTB_TARGET) -b $(DTC_FLAGS) -d $(KERNEL_DTB_BUILD_PATH)/$(DTB_D_DTC_TMP) $(KERNEL_DTB_BUILD_PATH)/$(DTB_D_TMP)
+
+clean:
+	@rm -rf $(KERNEL_DTB_BUILD_PATH)/*
+
 
 ########################################################################
 # boot targets
