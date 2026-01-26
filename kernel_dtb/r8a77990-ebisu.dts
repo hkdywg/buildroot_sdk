@@ -1,0 +1,798 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Device Tree Source for the ebisu board
+ *
+ * Copyright (C) 2018 Renesas Electronics Corp.
+ */
+
+/dts-v1/;
+#include "r8a77990.dtsi"
+#include <dt-bindings/clock/r8a77990-cpg-mssr.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/power/r8a77990-sysc.h>
+
+/ {
+	model = "Renesas Ebisu board based on r8a77990";
+	compatible = "renesas,ebisu", "renesas,r8a77990";
+
+	aliases {
+		serial0 = &scif2;
+		ethernet0 = &avb;
+		serial1 = &hscif2;
+		serial2 = &hscif1;
+	};
+
+	chosen {
+		bootargs = "ignore_loglevel";
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory@48000000 {
+		device_type = "memory";
+		/* first 128MB is reserved for secure area. */
+		reg = <0x0 0x48000000 0x0 0x38000000>;
+	};
+
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		/* For Audio DSP */
+		adsp_reserved: linux,adsp@57000000 {
+			compatible = "shared-dma-pool";
+			reusable;
+			reg = <0x00000000 0x57000000 0x0 0x01000000>;
+		};
+
+		/* global autoconfigured region for contiguous allocations */
+		linux,cma@58000000 {
+			compatible = "shared-dma-pool";
+			reusable;
+			reg = <0x00000000 0x58000000 0x0 0x10000000>;
+			linux,cma-default;
+		};
+
+		/* device specific region for contiguous allocations */
+		mmp_reserved: linux,multimedia@68000000 {
+			compatible = "shared-dma-pool";
+			reusable;
+			reg = <0x00000000 0x68000000 0x0 0x04000000>;
+		};
+	};
+
+
+	avb-mch@ec5a0100 {
+		compatible = "renesas,avb-mch-gen3";
+		reg =	<0 0xec5a0100 0 0x100>; 
+		reg-name = "adg_avb";
+
+		clocks = <&cpg CPG_MOD 922>;
+		clock-names = "adg";
+		resets = <&cpg 922>;
+	};
+
+	lvds0 {
+		compatible = "panel-lvds";
+
+		width-mm = <210>;
+		height-mm = <158>;
+
+		//data-mapping = "jeida-24";
+		data-mapping = "vesa-24";
+
+        panel-timing {                                         
+            clock-frequency = <53900000>;//96P jhh             
+            hactive = <1280>;                                  
+            vactive = <640>;                                   
+            hsync-len = <10>;                                  
+            hfront-porch = <20>;                               
+            hback-porch = <20>;                               
+            vfront-porch = <10>;                                
+            vback-porch = <20>;                                
+            vsync-len = <20>;                                   
+            hsync-active = <1>;                                
+            vsync-active = <1>;                                
+        };
+
+		port {
+			lvds0_panel_in: endpoint {
+				remote-endpoint = <&lvds0_out>;
+			};
+		};
+	};
+
+	lvds1 {
+		compatible = "panel-lvds";
+
+		width-mm = <210>;
+		height-mm = <158>;
+
+		//data-mapping = "jeida-24";
+		data-mapping = "vesa-24";
+
+        panel-timing {                                         
+            clock-frequency = <53900000>;
+            hactive = <1280>;                                  
+            vactive = <640>;                                   
+            hsync-len = <10>;                                  
+            hfront-porch = <20>;                               
+            hback-porch = <20>;                               
+            vfront-porch = <10>;                                
+            vback-porch = <20>;                                
+            vsync-len = <20>;                                   
+            hsync-active = <1>;                                
+            vsync-active = <1>;                                
+        };
+
+		port {
+			lvds1_panel_in: endpoint {
+				remote-endpoint = <&lvds1_out>;
+			};
+		};
+	};
+
+	mmngr {
+		compatible = "renesas,mmngr";
+		memory-region = <&mmp_reserved>;
+	};
+
+	mmngrbuf {
+		compatible = "renesas,mmngrbuf";
+	};
+
+//------------------------------------------------------------------------*/
+	reg_3p3v: regulator1 {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+	x13_clk: x13 {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <74250000>;
+	};
+
+	reg_1p8v: regulator0 {
+		compatible = "regulator-fixed";
+		regulator-name = "fixed-1.8V";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		regulator-boot-on;
+		regulator-always-on;
+	};
+
+
+
+	vbus0_usb2: regulator-vbus0-usb2 {
+		compatible = "regulator-fixed";
+
+		regulator-name = "USB20_VBUS_CN";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+
+		gpio = <&gpio6 4 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
+	vcc_sdhi0: regulator-vcc-sdhi0 {
+		compatible = "regulator-fixed";
+
+		regulator-name = "SDHI0 Vcc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpio = <&gpio5 17 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
+
+
+	vccq_sdhi0: regulator-vccq-sdhi0 {
+		compatible = "regulator-gpio";
+
+		regulator-name = "SDHI0 VccQ";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpios = <&gpio5 18 GPIO_ACTIVE_HIGH>;
+		gpios-states = <1>;
+		states = <3300000 1
+			  1800000 0>;
+	};
+
+	vcc_sdhi1: regulator-vcc-sdhi1 {
+		compatible = "regulator-fixed";
+
+		regulator-name = "SDHI1 Vcc";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpio = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+	};
+
+	vccq_sdhi1: regulator-vccq-sdhi1 {
+		compatible = "regulator-gpio";
+
+		regulator-name = "SDHI1 VccQ";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+
+		gpios = <&gpio3 15 GPIO_ACTIVE_HIGH>;
+		gpios-states = <1>;
+		states = <3300000 1
+			  1800000 0>;
+	};
+	vspm_if {
+		compatible = "renesas,vspm_if";
+	};
+
+	x12_clk: x12 {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <24576000>;
+	};
+
+/*---------------------------------------------ljx 20210730 add not used
+	sound_card: sound {
+		compatible = "audio-graph-card";
+
+		label = "rcar-sound";
+
+		dais = <&rsnd_port0>;
+	};
+------------------------------------------------------------------------*/
+
+};
+
+/*---------------------------------------------ljx 20210730 add not used
+&adsp {
+	status = "okay";
+	memory-region = <&adsp_reserved>;
+};
+
+&audio_clk_a {
+	clock-frequency = <22579200>;
+};
+------------------------------------------------------------------------*/
+
+&avb {
+	pinctrl-0 = <&avb_pins>;
+	pinctrl-names = "default";
+	phy-handle = <&phy0>;
+	//phy-mode = "rgmii-txid";
+	phy-mode = "rgmii"; /*rgmii tx-id not support hardware*/
+	status = "okay";
+
+	reset-gpios = <&gpio5 12 GPIO_ACTIVE_LOW>;
+    reset-delay-us = <20>;
+    reset_post_delay_us = <300>;
+
+	phy0: ethernet-phy@0 {
+		reg = <0>;
+		interrupt-parent = <&gpio2>;
+		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
+		reset-gpios = <&gpio5 19 GPIO_ACTIVE_LOW>;
+		//wake-gpios = <&gpio5 18 GPIO_ACTIVE_HIGH>;
+		//enable-gpios = <&gpio5 17 GPIO_ACTIVE_HIGH>;
+
+	};
+};
+
+&lvds0 {
+	//status = "disabled";
+	status = "okay";
+	//mode = "dual-link";
+
+	clocks = <&cpg CPG_MOD 727>,
+		 <&x13_clk>,
+		 <&extal_clk>;
+	clock-names = "fck", "dclkin.0", "extal";
+
+
+
+	ports {
+		port@1 {
+			lvds0_out: endpoint {
+				//remote-endpoint = <&thc63lvd1024_in0>;
+				remote-endpoint = <&lvds0_panel_in>;
+			};
+		};
+	};
+};
+
+&lvds1 {
+	status = "okay";
+	//status = "disabled";
+	//mode = "dual-link";
+
+	clocks = <&cpg CPG_MOD 727>,
+		 <&extal_clk>;
+	clock-names = "fck", "extal";
+
+	ports {
+		port@1 {
+			lvds1_out: endpoint {
+				//remote-endpoint = <&adv7123_in>;
+				remote-endpoint = <&lvds1_panel_in>;
+			};
+		};
+	};
+};
+
+&du {
+	pinctrl-0 = <&du_pins>;
+	pinctrl-names = "default";
+	status = "okay";
+
+	clocks = <&cpg CPG_MOD 724>,
+		 <&cpg CPG_MOD 723>,
+		 <&x13_clk>;
+	clock-names = "du.0", "du.1", "dclkin.0";
+};
+
+&ehci0 {
+	dr_mode = "otg";
+	status = "okay";
+};
+
+&extal_clk {
+	clock-frequency = <48000000>;
+};
+
+&hsusb {
+	dr_mode = "otg";
+	status = "okay";
+};
+///*---------------------------------------------ljx 20210730 add not used
+&i2c0 {
+	status = "okay";
+#if 0
+	ds981-encoder@c {
+		compatible = "ds983-encoder";
+		reg = <0x0C>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+		};
+	};
+#endif
+
+	//max96789-encoder@40 {
+		//compatible = "max9678-encoder";
+	max96781-encoder@40 {
+		compatible = "max96781-encoder";
+		reg = <0x40>;
+
+		ports {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+		};
+	};
+
+};
+
+&i2c1 {
+    status = "okay";
+
+	pinctrl-0 = <&i2c1_pins>;
+	pinctrl-names = "default";
+
+    ina219@44 {
+        compatible = "Texas Instruments,ina219-i2c";
+        reg = <0x44>;
+
+        ports {
+            #address-cells = <1>;
+            #size-cells = <0>;
+        };
+    };
+};
+/*
+&i2c3 {
+	status = "okay";
+
+	ak4613: codec@10 {
+		compatible = "asahi-kasei,ak4613";
+		#sound-dai-cells = <0>;
+		reg = <0x10>;
+		clocks = <&rcar_sound 3>;
+
+		asahi-kasei,in1-single-end;
+		asahi-kasei,in2-single-end;
+		asahi-kasei,out1-single-end;
+		asahi-kasei,out2-single-end;
+		asahi-kasei,out3-single-end;
+		asahi-kasei,out4-single-end;
+		asahi-kasei,out5-single-end;
+		asahi-kasei,out6-single-end;
+
+		port {
+			ak4613_endpoint: endpoint {
+				remote-endpoint = <&rsnd_endpoint0>;
+			};
+		};
+	};
+
+	cs2000: clk-multiplier@4f {
+		#clock-cells = <0>;
+		compatible = "cirrus,cs2000-cp";
+		reg = <0x4f>;
+		clocks = <&audio_clkout>, <&x12_clk>;
+		clock-names = "clk_in", "ref_clk";
+
+		assigned-clocks = <&cs2000>;
+		assigned-clock-rates = <24576000>;
+	};
+};
+------------------------------------------------------------------------*/
+
+&i2c_dvfs {
+	status = "okay";
+
+	clock-frequency = <400000>;
+
+	pmic: pmic@30 {
+		pinctrl-0 = <&irq0_pins>;
+		pinctrl-names = "default";
+
+		compatible = "rohm,bd9571mwv";
+		reg = <0x30>;
+		interrupt-parent = <&intc_ex>;
+		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-controller;
+		#interrupt-cells = <2>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+};
+
+
+&ohci0 {
+	dr_mode = "otg";
+	status = "okay";
+};
+/*---------------------------------------------ljx 20210730 add not used
+&pcie_bus_clk {
+	clock-frequency = <100000000>;
+};
+
+&pciec0 {
+	status = "okay";
+};
+
+------------------------------------------------------------------------*/
+&pfc {
+	avb_pins: avb {
+		mux {
+			groups = "avb_link", "avb_mii";
+			function = "avb";
+		};
+	};
+
+	du_pins: du {
+		//groups = "du_rgb888", "du_sync", "du_clk_out_0";
+		groups = "du_rgb888", "du_sync", "du_disp", "du_clk_out_0";
+		function = "du";
+	};
+
+	irq0_pins: irq0 {
+		groups = "intc_ex_irq0";
+		function = "intc_ex";
+	};
+
+	pwm3_pins: pwm3 {
+		groups = "pwm3_b";
+		function = "pwm3";
+	};
+
+	pwm5_pins: pwm5 {
+		groups = "pwm5_a";
+		function = "pwm5";
+	};
+
+	scif2_pins: scif2 {
+		groups = "scif2_data_a";
+		function = "scif2";
+	};
+
+	/*ljx 20210208 add hscif2 for cyber & projector*/
+	hscif2_pins: hscif2 {
+		groups = "hscif2_data_a";
+		function = "hscif2";
+	};
+
+	sdhi0_pins: sd0 {
+		groups = "sdhi0_data4", "sdhi0_ctrl";
+		function = "sdhi0";
+		power-source = <3300>;
+	};
+
+	sdhi0_pins_uhs: sd0_uhs {
+		groups = "sdhi0_data4", "sdhi0_ctrl";
+		function = "sdhi0";
+		power-source = <1800>;
+	};
+
+	sdhi1_pins: sd1 {
+		groups = "sdhi1_data4", "sdhi1_ctrl";
+		function = "sdhi1";
+		power-source = <3300>;
+	};
+
+	sdhi1_pins_uhs: sd1_uhs {
+		groups = "sdhi1_data4", "sdhi1_ctrl";
+		function = "sdhi1";
+		power-source = <1800>;
+	};
+
+	sdhi3_pins: sd3 {
+		groups = "sdhi3_data8", "sdhi3_ctrl", "sdhi3_ds";
+		function = "sdhi3";
+		power-source = <3300>;
+	};
+
+	sdhi3_pins_uhs: sd3_uhs {
+		groups = "sdhi3_data8", "sdhi3_ctrl", "sdhi3_ds";
+		function = "sdhi3";
+		power-source = <1800>;
+	};
+
+	usb0_pins: usb {
+		//groups = "usb0_b";
+		groups = "usb0_b", "usb0_id";
+		function = "usb0";
+	};
+
+	usb30_pins: usb30 {
+		groups = "usb30";
+		function = "usb30";
+	};
+
+	i2c1_pins: i2c1 {
+		groups = "i2c1_d";
+		function = "i2c1";
+	};
+
+	i2c3_pins: i2c3 {
+		groups = "i2c3";
+		function = "i2c3";
+	};
+
+	sound_pins: sound {
+		groups = "ssi01239_ctrl", "ssi0_data", "ssi1_data";
+		function = "ssi";
+	};
+
+	sound_clk_pins: sound_clk {
+		groups = "audio_clk_a", "audio_clk_b_a", "audio_clk_c_a",
+			 "audio_clkout_a", "audio_clkout1_a";
+		function = "audio_clk";
+	};
+
+
+
+
+
+	/*ljx 20211108 add hscif1 for mcu & soc */
+	hscif1_pins: hscif1{
+		groups = "hscif1_data_a";
+		function = "hscif1";
+	};
+
+	/*ljx 20210622 add msiof0*/
+	msiof0_pins: spi0 {
+		groups = "msiof0_clk", "msiof0_sync",
+		"msiof0_rxd", "msiof0_txd";
+		function = "msiof0";
+	};
+};
+
+
+/*ljx 20211108 add */
+&hscif1 {
+	pinctrl-0 = <&hscif1_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+};
+/*ljx 20210622 add msiof_ref_clk*/
+&msiof_ref_clk {
+	clock-frequency = <133333333>; 
+};
+/*ljx 20210622 add msiof0*/
+&msiof0 {
+	pinctrl-0 = <&msiof0_pins>;
+	pinctrl-names = "default";
+	status = "okay"; 
+	/* Add a subnode. */
+	slavedev: spidev@0 {
+		compatible = "maker,slavedev";
+		reg = <0>;
+		spi-max-frequency = <16666666>;
+		spi-cpha;
+		spi-cpol;
+	};
+};
+
+&pwm3 {
+	pinctrl-0 = <&pwm3_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+};
+
+&pwm5 {
+	pinctrl-0 = <&pwm5_pins>;
+	pinctrl-name = "default";
+
+	status = "okay";
+};
+
+&scif2 {
+	pinctrl-0 = <&scif2_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+};
+
+/*ljx 20210208 add */
+&hscif2 {
+	pinctrl-0 = <&hscif2_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+};
+
+/*--------ljx 20210730 add not used
+&sdhi0 {
+	pinctrl-0 = <&sdhi0_pins>;
+	pinctrl-1 = <&sdhi0_pins_uhs>;
+	pinctrl-names = "default", "state_uhs";
+
+	vmmc-supply = <&vcc_sdhi0>;
+	vqmmc-supply = <&vccq_sdhi0>;
+	cd-gpios = <&gpio3 12 GPIO_ACTIVE_LOW>;
+	wp-gpios = <&gpio3 13 GPIO_ACTIVE_HIGH>;
+	bus-width = <4>;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	status = "okay";
+};
+
+&sdhi1 {
+	pinctrl-0 = <&sdhi1_pins>;
+	pinctrl-1 = <&sdhi1_pins_uhs>;
+	pinctrl-names = "default", "state_uhs";
+
+	vmmc-supply = <&vcc_sdhi1>;
+	vqmmc-supply = <&vccq_sdhi1>;
+	cd-gpios = <&gpio3 14 GPIO_ACTIVE_LOW>;
+	bus-width = <4>;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	status = "okay";
+};
+------------------------------------------------------------------------*/
+
+
+&ssi1 {
+	shared-pin;
+};
+/*-------------------------------------------------ljx 20210730 add not used
+&rcar_sound {
+	pinctrl-0 = <&sound_pins &sound_clk_pins>;
+	pinctrl-names = "default";
+
+
+	#sound-dai-cells = <0>;
+
+	#clock-cells = <1>;
+	clock-frequency = <12288000 11289600>;
+	clkout-lr-synchronous;
+
+	status = "okay";
+
+	clocks = <&cpg CPG_MOD 1005>,
+		 <&cpg CPG_MOD 1006>, <&cpg CPG_MOD 1007>,
+		 <&cpg CPG_MOD 1008>, <&cpg CPG_MOD 1009>,
+		 <&cpg CPG_MOD 1010>, <&cpg CPG_MOD 1011>,
+		 <&cpg CPG_MOD 1012>, <&cpg CPG_MOD 1013>,
+		 <&cpg CPG_MOD 1014>, <&cpg CPG_MOD 1015>,
+		 <&cpg CPG_MOD 1022>, <&cpg CPG_MOD 1023>,
+		 <&cpg CPG_MOD 1024>, <&cpg CPG_MOD 1025>,
+		 <&cpg CPG_MOD 1026>, <&cpg CPG_MOD 1027>,
+		 <&cpg CPG_MOD 1028>, <&cpg CPG_MOD 1029>,
+		 <&cpg CPG_MOD 1030>, <&cpg CPG_MOD 1031>,
+		 <&cpg CPG_MOD 1020>, <&cpg CPG_MOD 1021>,
+		 <&cpg CPG_MOD 1020>, <&cpg CPG_MOD 1021>,
+		 <&cpg CPG_MOD 1019>, <&cpg CPG_MOD 1018>,
+		 <&audio_clk_a>, <&cs2000>, <&audio_clk_c>,
+		 <&cpg CPG_CORE R8A77990_CLK_ZA2>;
+
+	ports {
+		rsnd_port0: port@0 {
+			rsnd_endpoint0: endpoint {
+				remote-endpoint = <&ak4613_endpoint>;
+
+				dai-format = "left_j";
+				bitclock-master = <&rsnd_endpoint0>;
+				frame-master = <&rsnd_endpoint0>;
+
+				playback = <&ssi0 &src0 &dvc0>;
+				capture  = <&ssi1 &src1 &dvc1>;
+			};
+		};
+	};
+};
+------------------------------------------------------------------------*/
+
+&sdhi3 {
+	/* used for on-board 8bit eMMC */
+	pinctrl-0 = <&sdhi3_pins>;
+	pinctrl-1 = <&sdhi3_pins_uhs>;
+	pinctrl-names = "default", "state_uhs";
+
+	iommus = <&ipmmu_ds1 35>;
+
+	vmmc-supply = <&reg_3p3v>;
+	vqmmc-supply = <&reg_1p8v>;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	bus-width = <8>;
+	no-sd;
+	no-sdio;
+	non-removable;
+	status = "okay";
+};
+
+
+
+&usb2_phy0 {
+	pinctrl-0 = <&usb0_pins>;
+	pinctrl-names = "default";
+
+	vbus-supply = <&vbus0_usb2>;
+	status = "okay";
+};
+
+/* ----------------------------------------------ljx 20210730 add not used
+&usb3_peri0 {
+	status = "okay";
+};
+///*
+&vin4 {
+	status = "okay";
+};
+
+&vin5 {
+	status = "okay";
+};
+------------------------------------------------------------------------*/
+
+&vspb {
+	status = "okay";
+};
+
+&vspi0 {
+	status = "okay";
+};
+
+&rwdt {
+	timeout-sec = <60>;
+	status = "okay";
+};
+&xhci0 {
+	pinctrl-0 = <&usb30_pins>;
+	pinctrl-names = "default";
+
+	status = "okay";
+};
