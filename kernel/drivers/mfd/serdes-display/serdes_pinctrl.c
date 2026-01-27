@@ -167,6 +167,10 @@ static int serdes_pinctrl_probe(struct platform_device *pdev)
         return -1;
 
     pinctrl_info = chip_data->pinctrl_info;
+    if(pinctrl_info == NULL) {
+        printk("---- pinctrl info  is null\n");
+        return -1;
+    }
     serdes_pinctrl = devm_kzalloc(dev, sizeof(*serdes_pinctrl), GFP_KERNEL);
     if(!serdes_pinctrl)
         return -ENOMEM;
