@@ -87,13 +87,13 @@ int serdes_irq_init(struct serdes *serdes)
             return serdes->err_irq;
 
         SERDES_DBG_MFD("%s %s lock_irq = %d, gpio = %d\n", __func__,
-                       serdes->chip_data->name, serdes->lock_irq,
-                       desc_to_gpio(serdes->lock_gpio));
+                       serdes->chip_data->name, serdes->err_irq,
+                       desc_to_gpio(serdes->err_gpio));
 
-        ret = devm_request_threaded_irq(serdes->dev, serdes->lock_irq, NULL,
+        ret = devm_request_threaded_irq(serdes->dev, serdes->err_irq, NULL,
                                         serdes_bridge_err_irq_handler,
                                         IRQF_TRIGGER_RISING | IRQF_ONESHOT,
-                                        serdes->lock_gpio->label, serdes);
+                                        serdes->err_gpio->label, serdes);
         if(ret)
             return dev_err_probe(serdes->dev, ret,
                                  "Failed to request serdes err IRQ\n");

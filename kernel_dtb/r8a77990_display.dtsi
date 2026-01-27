@@ -78,9 +78,9 @@
         reg = <0x40>;
         #address-cells = <1>;
         #size-cells = <0>;
-//        pinctrl-names = "default";
-//        lock-gpios = <&gpio1 17 GPIO_ACTIVE_HIGH>;
-//        err-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
+        pinctrl-names = "default";
+        lock-gpios = <&gpio1 17 GPIO_ACTIVE_HIGH>;
+        err-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
 //
         serdes-init-sequence = [
             // pipe_x stream 0
