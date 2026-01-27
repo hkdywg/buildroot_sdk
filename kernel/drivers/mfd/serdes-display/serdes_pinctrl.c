@@ -123,8 +123,8 @@ static int serdes_pinctrl_gpio_init(struct serdes *serdes)
 
     ret = devm_mfd_add_devices(pinctrl->dev, PLATFORM_DEVID_AUTO, serdes_devs,
                                mfd_num, NULL, 0, NULL);
-    if(!ret)
-        dev_err(pinctrl->dev, "Failed to add serdes pinctrl devs\n");
+    if(ret != 0)
+        dev_err(pinctrl->dev, "Failed to add serdes children\n");
 
     return ret;
 }

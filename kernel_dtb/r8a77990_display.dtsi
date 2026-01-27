@@ -81,7 +81,7 @@
         pinctrl-names = "default";
         lock-gpios = <&gpio1 17 GPIO_ACTIVE_HIGH>;
         err-gpios = <&gpio1 11 GPIO_ACTIVE_HIGH>;
-//
+
         serdes-init-sequence = [
             // pipe_x stream 0
             00A3 0000
@@ -95,34 +95,34 @@
             3303 0082
         ];
 
-//        i2c0_max96781_pinctrl: i2c0-max96781-pinctrl {
-//            compatible = "maxim,max96781-pinctrl";
-//            pinctrl-names = "default";
-//            pinctrl-0 = <&i2c0_max96781_pinctrl_pins>;
-//            status = "okay";
-//
-//            i2c0_max96781_pinctrl_pins: pinctrl-pins {
-//                i2c {
-//                    groups = "MAX96781_I2C";
-//                    function = "MAX96781_I2C";
-//                };
-//                /*
-//                lcd-bl-pwd {
-//                    pins = "MAX96781_MFP0";
-//                    function = "SER_TXID4_TO_DES_LINKA";
-//                };
-//                */
-//            };
-//            
-//            i2c0_max96781_gpio: i2c0-max96781-gpio {
-//                compatible = "maxim, max96781-gpio";
-//                status = "okay";
-//
-//                gpio-controller;
-//                #gpio-cells = <2>;
-//                gpio-ranges = <&i2c0_max96781_pinctrl 0 471 23>;
-//            };
-//        };
+        i2c0_max96781_pinctrl: i2c0-max96781-pinctrl {
+            compatible = "maxim,max96781-pinctrl";
+            pinctrl-names = "default";
+            pinctrl-0 = <&i2c0_max96781_pinctrl_pins>;
+            status = "okay";
+
+            i2c0_max96781_pinctrl_pins: pinctrl-pins {
+                i2c {
+                    groups = "max96781_i2c";
+                    function = "max96781_i2c";
+                };
+                /*
+                lcd-bl-pwd {
+                    pins = "MAX96781_MFP0";
+                    function = "SER_TXID4_TO_DES_LINKA";
+                };
+                */
+            };
+            
+            i2c0_max96781_gpio: i2c0-max96781-gpio {
+                compatible = "maxim,max96781-gpio";
+                status = "okay";
+
+                gpio-controller;
+                #gpio-cells = <2>;
+                gpio-ranges = <&i2c0_max96781_pinctrl 1 471 2>;
+            };
+        };
 
         i2c0_max96781_bridge: i2c0-max96781-bridge {
             compatible = "maxim,max96781-bridge";
