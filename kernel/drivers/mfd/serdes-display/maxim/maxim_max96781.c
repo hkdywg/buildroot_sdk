@@ -812,6 +812,7 @@ struct serdes_chip_data serdes_max96781_data = {
     .serdes_id          = MAXIM_ID_MAX96781,
     .connector_type     = DRM_MODE_CONNECTOR_LVDS,
     .regmap_config      = &max96781_regmap_config,
+    .pinctrl_info       = &max96781_pinctrl_info,
     .bridge_ops         = &max96781_bridge_ops,
     .pinctrl_ops        = &max96781_pinctrl_ops,
     .gpio_ops           = &max96781_gpio_ops,
