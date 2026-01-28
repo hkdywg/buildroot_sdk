@@ -133,8 +133,6 @@ static void serdes_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 #define serdes_gpio_dbg_show NULL
 #endif
 
-
-
 static const struct gpio_chip serdes_gpio_chip = {
     .owner              = THIS_MODULE,
     .request            = gpiochip_generic_request,

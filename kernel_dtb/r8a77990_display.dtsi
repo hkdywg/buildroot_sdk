@@ -120,7 +120,7 @@
 
                 gpio-controller;
                 #gpio-cells = <2>;
-                gpio-ranges = <&i2c0_max96781_pinctrl 1 471 2>;
+                gpio-ranges = <&i2c0_max96781_pinctrl 0 340 5>;
             };
         };
 
