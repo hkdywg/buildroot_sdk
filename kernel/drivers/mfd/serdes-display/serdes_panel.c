@@ -182,7 +182,7 @@ static int serdes_panel_probe(struct platform_device *pdev)
     struct serdes_panel *serdes_panel;
     struct device_node *np = NULL;
     int ret;
-
+printk("run int panel probe\n");
     serdes_panel = devm_kzalloc(dev, sizeof(*serdes_panel), GFP_KERNEL);
     if(!serdes_panel)
         return -ENOMEM;
@@ -220,6 +220,7 @@ static int serdes_panel_probe(struct platform_device *pdev)
     dev_info(dev, "serdes %s-%s serdes_panel_probe successful\n",
         dev_name(serdes->dev), serdes->chip_data->name);
 
+printk("run int panel probe done\n");
     return 0;
 }
 
@@ -237,10 +238,10 @@ static int serdes_panel_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id serdes_panel_of_match[] = {
-    { .compatible =  "maxim,max96781-panel", },
-    { .compatible =  "ti,ds90uh981-panel", },
-    { .compatible =  "ti,ds90uh983-panel", },
-    { .compatible =  "aim,aim951x-panel", },
+    { .compatible =  "maxim,max96752-panel", },
+    { .compatible =  "ti,ds90uh928-panel", },
+    { .compatible =  "ti,ds90uh968-panel", },
+    { .compatible =  "aim,aim916x-panel", },
     { }
 };
 

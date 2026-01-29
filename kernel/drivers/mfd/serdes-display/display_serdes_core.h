@@ -100,9 +100,13 @@ struct serdes;
 enum serdes_id {
     SERDES_ID_INVALID = 0,
     MAXIM_ID_MAX96781,
+    MAXIM_ID_MAX96752,
     TI_ID_DS90UH981,
     TI_ID_DS90UH983,
+    TI_ID_DS90UB928,
+    TI_ID_DS90UB968,
     AIM_ID_AIM951X,
+    AIM_ID_AIM916,
     SERDES_NUM_ID,
 };
 

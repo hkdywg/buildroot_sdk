@@ -54,6 +54,50 @@ static const struct mfd_cell serdes_aim951x_devs[] = {
     },
 };
 
+static const struct mfd_cell serdes_max96752_devs[] = {
+    {
+        .name = "serdes-pinctrl",
+        .of_compatible = "maxim,max96752-pinctrl",
+    },
+    {
+        .name = "serdes-panel",
+        .of_compatible = "maxim,max96752-panel",
+    },
+};
+
+static const struct mfd_cell serdes_ds90ub928_devs[] = {
+    {
+        .name = "serdes-pinctrl",
+        .of_compatible = "ti,ds90ub928-pinctrl",
+    },
+    {
+        .name = "serdes-panel",
+        .of_compatible = "ti,ds90ub928-panel",
+    },
+};
+
+static const struct mfd_cell serdes_ds90ub968_devs[] = {
+    {
+        .name = "serdes-pinctrl",
+        .of_compatible = "ti,ds90ub968-pinctrl",
+    },
+    {
+        .name = "serdes-panel",
+        .of_compatible = "ti,ds90ub968-panel",
+    },
+};
+
+static const struct mfd_cell serdes_aim916_devs[] = {
+    {
+        .name = "serdes-pinctrl",
+        .of_compatible = "aim,aim916-pinctrl",
+    },
+    {
+        .name = "serdes-panel",
+        .of_compatible = "aim,aim916-panel",
+    },
+};
+
 int serdes_reg_read(struct serdes *serdes, unsigned int reg, unsigned int *val)
 {
     int ret;
@@ -159,6 +203,10 @@ int serdes_device_init(struct serdes *serdes)
         serdes_devs = serdes_max96781_devs;
         mfd_num = ARRAY_SIZE(serdes_max96781_devs);
         break;
+    case MAXIM_ID_MAX96752:
+        serdes_devs = serdes_max96752_devs;
+        mfd_num = ARRAY_SIZE(serdes_max96752_devs);
+        break;
     case TI_ID_DS90UH981:
         serdes_devs = serdes_ds90uh981_devs;
         mfd_num = ARRAY_SIZE(serdes_ds90uh981_devs);
@@ -167,9 +215,21 @@ int serdes_device_init(struct serdes *serdes)
         serdes_devs = serdes_ds90uh983_devs;
         mfd_num = ARRAY_SIZE(serdes_ds90uh983_devs);
         break;
+    case TI_ID_DS90UB928:
+        serdes_devs = serdes_ds90ub928_devs;
+        mfd_num = ARRAY_SIZE(serdes_ds90ub928_devs);
+        break;
+    case TI_ID_DS90UB968:
+        serdes_devs = serdes_ds90ub968_devs;
+        mfd_num = ARRAY_SIZE(serdes_ds90ub968_devs);
+        break;
     case AIM_ID_AIM951X:
         serdes_devs = serdes_aim951x_devs;
         mfd_num = ARRAY_SIZE(serdes_aim951x_devs);
+        break;
+    case AIM_ID_AIM916:
+        serdes_devs = serdes_aim916_devs;
+        mfd_num = ARRAY_SIZE(serdes_aim916_devs);
         break;
     default:
         dev_info(serdes->dev, "unknown device\n");

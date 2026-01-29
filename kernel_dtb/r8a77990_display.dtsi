@@ -128,8 +128,7 @@
             compatible = "maxim,max96781-bridge";
             status = "okay";
         };
-
-		/*
+/*
         ports {
             #address-cells = <1>;
             #size-cells = <0>;
@@ -148,101 +147,101 @@
 				};
 			};
         };
-		*/
+*/
 	};
 
-   // i2c0_max96752: i2c0-max96752@4a {
-   // 	compatible = "maxim,max96752";
-   // 	reg = <0x4a>;
-   // 	#address-celss = <1>;
-   // 	#size-celss = <0>;
-   // 	//id-serdes-panel-split = <0x02>;
-   // 	link = <0x01>;
-   // 	status = "okay";
-   // 	
-   // 	serdes-init-sequence = [
-   // 		// port A output, format VESA, Split with DE
-   // 		01ce 0046
-   // 	];
+    i2c0_max96752: i2c0-max96752@4a {
+    	compatible = "maxim,max96752";
+    	reg = <0x4a>;
+    	#address-celss = <1>;
+    	#size-celss = <0>;
+    	//id-serdes-panel-split = <0x02>;
+    	link = <0x01>;
+    	status = "okay";
+    	
+    	serdes-init-sequence = [
+    		// port A output, format VESA, Split with DE
+    		01ce 0046
+    	];
 
-   // 	i2c0_max96752_pinctrl: i2c0-max96752-pinctrl {
-   // 		compatible = "maxim,max96752-pinctrl";
-   // 		status = "okay";
+    	i2c0_max96752_pinctrl: i2c0-max96752-pinctrl {
+    		compatible = "maxim,max96752-pinctrl";
+    		status = "okay";
 
-   // 		pinctrl-names = "default","init","sleep";
-   // 		pinctrl-0 = "i2c0_max96752_panel_pins";
-   // 		pinctrl-1 = "i2c0_max96752_panel_pins";
-   // 		pinctrl-2 = "i2c0_max96752_panel_sleep_pins";
-   // 	
-   // 		i2c0_max96752_panel_pins: panel-pins {
-   // 			lcd-rst-pin {
-   // 				pins = "MAX96752_GPIO10";
-   // 				function = "DES_TXID10_OUTPUT_HIGH";
-   // 			};
-   // 			tp-rst {
-   // 				pins = "MAX96752_GPIO5";
-   // 				function = "DES_TXID5_OUTPUT_HIGH";
-   // 			};
-   // 			lcd-pwr-on {
-   // 				pins = "MAX96752_GPIO3";
-   // 				function = "DES_TXID3_OUTPUT_HIGH";
-   // 			};
-   // 			lcd-bl-pwd {
-   // 				pins = "MAX96752_GPIO4";
-   // 				function = "SER_TO_DES_RXID4";
-   // 			};
-   // 		};
+    		pinctrl-names = "default","init","sleep";
+    		pinctrl-0 = "i2c0_max96752_panel_pins";
+    		pinctrl-1 = "i2c0_max96752_panel_pins";
+    		pinctrl-2 = "i2c0_max96752_panel_sleep_pins";
+    	
+    		i2c0_max96752_panel_pins: panel-pins {
+    			lcd-rst-pin {
+    				pins = "MAX96752_GPIO10";
+    				function = "DES_TXID10_OUTPUT_HIGH";
+    			};
+    			tp-rst {
+    				pins = "MAX96752_GPIO5";
+    				function = "DES_TXID5_OUTPUT_HIGH";
+    			};
+    			lcd-pwr-on {
+    				pins = "MAX96752_GPIO3";
+    				function = "DES_TXID3_OUTPUT_HIGH";
+    			};
+    			lcd-bl-pwd {
+    				pins = "MAX96752_GPIO4";
+    				function = "SER_TO_DES_RXID4";
+    			};
+    		};
 
-   // 		i2c0_max96752_panel_sleep_pins: panel-sleep-pins {
-   // 			lcd-rst-pin {
-   // 				pins = "MAX96752_GPIO10";
-   // 				function = "DES_TXID10_OUTPUT_LOW";
-   // 			};
-   // 			tp-rst {
-   // 				pins = "MAX96752_GPIO5";
-   // 				function = "DES_TXID5_OUTPUT_LOW";
-   // 			};
-   // 			lcd-pwr-on {
-   // 				pins = "MAX96752_GPIO3";
-   // 				function = "DES_TXID3_OUTPUT_LOW";
-   // 			};
-   // 		};
+    		i2c0_max96752_panel_sleep_pins: panel-sleep-pins {
+    			lcd-rst-pin {
+    				pins = "MAX96752_GPIO10";
+    				function = "DES_TXID10_OUTPUT_LOW";
+    			};
+    			tp-rst {
+    				pins = "MAX96752_GPIO5";
+    				function = "DES_TXID5_OUTPUT_LOW";
+    			};
+    			lcd-pwr-on {
+    				pins = "MAX96752_GPIO3";
+    				function = "DES_TXID3_OUTPUT_LOW";
+    			};
+    		};
 
-   // 		i2c0_max96752_gpio: i2c0-max96752-gpio {
-   // 			compatible = "maxim,max96752-gpio";
-   // 			status = "okay";
+    		i2c0_max96752_gpio: i2c0-max96752-gpio {
+    			compatible = "maxim,max96752-gpio";
+    			status = "okay";
 
-   // 			gpio-controller;
-   // 			#gpio-cells = <2>;
-   // 			#gpio-ranges = <&i2c0_max96752_pinctrl 0 250 15>;
-   // 		};
-   // 	};
+    			gpio-controller;
+    			#gpio-cells = <2>;
+    			#gpio-ranges = <&i2c0_max96752_pinctrl 0 250 15>;
+    		};
+    	};
 
-   // 	i2c0_max96752_panel: i2c0-max96752-panel {
-   // 		compatible = "maxim,max96752-panel";
-   // 		status = "okay";
+    	i2c0_max96752_panel: i2c0-max96752-panel {
+    		compatible = "maxim,max96752-panel";
+    		status = "okay";
 
-   // 		panel-timing {
-   // 			clock-frequency = <25000000>;
-   // 			hactive = <800>;
-   // 			vactive = <480>;
-   // 			hsync-len = <14>;
-   // 			hfront-porch = <20>;
-   // 			hback-porch = <20>;
-   // 			vfront-porch = <4>;
-   // 			vback-porch = <4>;
-   // 			vsync-len = <2>;
-   // 			hsync-active = <1>;                                
-   // 			vsync-active = <1>;                                
-   // 		};
-   // 		/*
-   // 		port {
-   // 			i2c0_max96752_from_max96781: endpoint {
-   // 				remote-endpoint = <&i2c0_max96781_out>;
-   // 			};
-   // 		};	
-   // 		*/
-   // 	};
-   // };
+    		panel-timing {
+    			clock-frequency = <25000000>;
+    			hactive = <800>;
+    			vactive = <480>;
+    			hsync-len = <14>;
+    			hfront-porch = <20>;
+    			hback-porch = <20>;
+    			vfront-porch = <4>;
+    			vback-porch = <4>;
+    			vsync-len = <2>;
+    			hsync-active = <1>;                                
+    			vsync-active = <1>;                                
+    		};
+    		/*
+    		port {
+    			i2c0_max96752_from_max96781: endpoint {
+    				remote-endpoint = <&i2c0_max96781_out>;
+    			};
+    		};	
+    		*/
+    	};
+    };
 };
 
