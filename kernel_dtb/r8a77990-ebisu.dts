@@ -203,39 +203,6 @@
 	};
 };
 
-&lvds0 {
-	//status = "disabled";
-	status = "okay";
-	//mode = "dual-link";
-
-	clocks = <&cpg CPG_MOD 727>,
-		 <&x13_clk>,
-		 <&extal_clk>;
-	clock-names = "fck", "dclkin.0", "extal";
-
-	ports {
-		port@1 {
-			lvds0_out: endpoint {
-				remote-endpoint = <&lvds0_panel_in>;
-			};
-		};
-	};
-};
-
-&lvds1 {
-	status = "okay";
-	clocks = <&cpg CPG_MOD 727>,
-		 <&extal_clk>;
-	clock-names = "fck", "extal";
-
-	ports {
-		port@1 {
-			lvds1_out: endpoint {
-				remote-endpoint = <&lvds1_panel_in>;
-			};
-		};
-	};
-};
 
 &du {
 	pinctrl-0 = <&du_pins>;
