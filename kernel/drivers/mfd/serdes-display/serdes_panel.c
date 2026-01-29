@@ -136,6 +136,87 @@ static const struct drm_panel_funcs serdes_panel_funcs = {
     .get_modes = serdes_panel_get_modes,
 };
 
+static void serdes_panel_timing_info(struct device *dev, struct display_timing *dt)
+{
+    /*
+     *
+     *				    Active Video
+     * Video  ______________________XXXXXXXXXXXXXXXXXXXXXX_____________________
+     *	  |<- sync ->|<- back ->|<----- active ----->|<- front ->|<- sync..
+     *	  |	     |	 porch  |		     |	 porch	 |
+     *
+     * HSync _|¯¯¯¯¯¯¯¯¯¯|___________________________________________|¯¯¯¯¯¯¯¯¯
+     *
+     * VSync ¯|__________|¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯|_________
+    struct display_timing {
+        struct timing_entry pixelclock;
+
+        struct timing_entry hactive;		
+        struct timing_entry hfront_porch;	
+        struct timing_entry hback_porch;	
+        struct timing_entry hsync_len;		
+
+        struct timing_entry vactive;		
+        struct timing_entry vfront_porch;	
+        struct timing_entry vback_porch;	
+        struct timing_entry vsync_len;		
+
+        enum display_flags flags;
+    };
+
+    enum display_flags {
+        DISPLAY_FLAGS_HSYNC_LOW		= BIT(0),
+        DISPLAY_FLAGS_HSYNC_HIGH	= BIT(1),
+        DISPLAY_FLAGS_VSYNC_LOW		= BIT(2),
+        DISPLAY_FLAGS_VSYNC_HIGH	= BIT(3),
+
+        DISPLAY_FLAGS_DE_LOW		= BIT(4),
+        DISPLAY_FLAGS_DE_HIGH		= BIT(5),
+        DISPLAY_FLAGS_PIXDATA_POSEDGE	= BIT(6),
+        DISPLAY_FLAGS_PIXDATA_NEGEDGE	= BIT(7),
+        DISPLAY_FLAGS_INTERLACED	= BIT(8),
+        DISPLAY_FLAGS_DOUBLESCAN	= BIT(9),
+        DISPLAY_FLAGS_DOUBLECLK		= BIT(10),
+        DISPLAY_FLAGS_SYNC_POSEDGE	= BIT(11),
+        DISPLAY_FLAGS_SYNC_NEGEDGE	= BIT(12),
+    };
+
+    struct timing_entry {
+        u32 min;
+        u32 typ;
+        u32 max;
+    };
+    */
+	/* timing info */
+	dev_info(dev, "Parsing display timing from device tree:\n"
+             "--------------------------------------------\n"
+             "Pixel Clock:           %u Hz\n"
+             "Horizontal Active:     %u px\n"
+             "Horizontal Front Porch:%u px\n"
+             "Horizontal Back Porch: %u px\n"
+             "Horizontal Sync Length: %u px\n"
+             "Vertical Active:       %u lines\n"
+             "Vertical Front Porch:  %u lines\n"
+             "Vertical Back Porch:   %u lines\n"
+             "Vertical Sync Length:  %u lines\n",
+             dt->pixelclock.typ,
+             dt->hactive.typ, dt->hfront_porch.typ, dt->hback_porch.typ, dt->hsync_len.typ,
+             dt->vactive.typ, dt->vfront_porch.typ, dt->vback_porch.typ, dt->vsync_len.typ);
+
+    /* HSYNC */
+    if (dt->flags & DISPLAY_FLAGS_HSYNC_HIGH)
+        dev_info(dev, "  HSYNC: active-high\n");
+    else if (dt->flags & DISPLAY_FLAGS_HSYNC_LOW)
+        dev_info(dev, "  HSYNC: active-low\n");
+
+    /* VSYNC */
+    if (dt->flags & DISPLAY_FLAGS_VSYNC_HIGH)
+        dev_info(dev, "  VSYNC: active-high\n");
+    else if (dt->flags & DISPLAY_FLAGS_VSYNC_LOW)
+        dev_info(dev, "  VSYNC: active-low\n");
+
+}
+
 static int serdes_panel_parse_dt(struct serdes_panel *serdes_panel)
 {
     struct device *dev = serdes_panel->dev;
@@ -161,13 +242,12 @@ static int serdes_panel_parse_dt(struct serdes_panel *serdes_panel)
         }
     }
 
-    dev_info(dev, "panel size %dx%d\n", serdes_panel->width_mm, serdes_panel->height_mm);
-
     ret = of_get_display_timing(dev->of_node, "panel-timing", &dt);
     if(ret < 0) {
         dev_err(dev, "%pOF:serdes no panel-timing node found\n", dev->of_node);
         return ret;
     }
+    serdes_panel_timing_info(dev, &dt);
     
     videomode_from_timing(&dt, &vm);
     drm_display_mode_from_videomode(&vm, &serdes_panel->mode);
@@ -182,7 +262,7 @@ static int serdes_panel_probe(struct platform_device *pdev)
     struct serdes_panel *serdes_panel;
     struct device_node *np = NULL;
     int ret;
-printk("run int panel probe\n");
+
     serdes_panel = devm_kzalloc(dev, sizeof(*serdes_panel), GFP_KERNEL);
     if(!serdes_panel)
         return -ENOMEM;
@@ -220,7 +300,6 @@ printk("run int panel probe\n");
     dev_info(dev, "serdes %s-%s serdes_panel_probe successful\n",
         dev_name(serdes->dev), serdes->chip_data->name);
 
-printk("run int panel probe done\n");
     return 0;
 }
 

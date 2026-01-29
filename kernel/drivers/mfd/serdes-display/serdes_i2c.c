@@ -502,9 +502,11 @@ static int serdes_i2c_probe(struct i2c_client *client,
 }
 
 extern struct max96781_data serdes_max96781_data;
+extern struct max96781_data serdes_max96752_data;
 
 static const struct of_device_id serdes_of_match[] = {
     { .compatible = "maxim,max96781",   .data = &serdes_max96781_data   },
+    { .compatible = "maxim,max96752",   .data = &serdes_max96752_data   },
 #if 0
     { .compatible = "ti,ds90uh981",     .data = &serdes_ds90uh981_data  },
     { .compatible = "ti,ds90uh983",     .data = &serdes_ds90uh983_data  },
