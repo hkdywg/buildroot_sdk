@@ -106,7 +106,7 @@ KERNEL_OUTPUT_CONFIG_PATH := ${KERNEL_BUILD_PATH}/.config
 KERNEL_DEFAULT_COFNIG_PATH := ${TOP_DIR}/device/${BUILD_PROJECT}/config/${KERNEL_COFNIG_NAME}
 
 ${KERNEL_OUTPUT_CONFIG_PATH}: ${KERNEL_DEFAULT_COFNIG_PATH}
-	$(call print_target})
+	$(call print_target)
 	${Q}echo "Kenel's defconfig is update. Use it"
 	${Q}mkdir -p $(dir ${KERNEL_OUTPUT_CONFIG_PATH})
 	${Q}cmp -s ${KERNEL_DEFAULT_COFNIG_PATH} ${KERNEL_OUTPUT_CONFIG_PATH} || \
