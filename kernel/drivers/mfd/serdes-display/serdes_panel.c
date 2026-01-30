@@ -94,9 +94,9 @@ static int serdes_panel_get_modes(struct drm_panel *panel,
     struct serdes_panel *serdes_panel = to_serdes_panel(panel);
     struct serdes *serdes = serdes_panel->parent;
     struct drm_display_mode *mode;
-    u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
+    u32 bus_format = serdes_panel->bus_format;
     int ret = 1;
-
+printk("---------------sss\n");
     connector->display_info.width_mm = serdes_panel->width_mm;
     connector->display_info.height_mm = serdes_panel->height_mm;
     drm_display_info_set_bus_formats(&connector->display_info, &bus_format, 1);
@@ -223,6 +223,7 @@ static int serdes_panel_parse_dt(struct serdes_panel *serdes_panel)
     struct display_timing dt;
     struct videomode vm;
     int ret, len;
+    const char *mapping;
     unsigned int panel_size[2] = {320, 180};
 
     serdes_panel->width_mm = panel_size[0];
@@ -245,9 +246,30 @@ static int serdes_panel_parse_dt(struct serdes_panel *serdes_panel)
     ret = of_get_display_timing(dev->of_node, "panel-timing", &dt);
     if(ret < 0) {
         dev_err(dev, "%pOF:serdes no panel-timing node found\n", dev->of_node);
-        return ret;
+        return -ENODEV;
     }
     serdes_panel_timing_info(dev, &dt);
+
+    ret = of_property_read_string(dev->of_node, "data-mapping", &mapping);
+    if(ret < 0 ) {
+        dev_err(dev, "%pOF: invalid of missing %d DT property\n", 
+                dev->of_node, "data-mapping");
+        return -ENODEV;
+    }
+
+    if (!strcmp(mapping, "jeida-18")) {
+        serdes_panel->bus_format = MEDIA_BUS_FMT_RGB666_1X7X3_SPWG;
+    } else if (!strcmp(mapping, "jeida-24")) {
+        serdes_panel->bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_JEIDA;
+    } else if (!strcmp(mapping, "vesa-24")) {
+        serdes_panel->bus_format = MEDIA_BUS_FMT_RGB888_1X7X4_SPWG;
+    } else {
+        dev_err(dev, "%pOF: invalid or missing %s DT property\n",
+            dev->of_node, "data-mapping");
+        return -EINVAL;
+    }
+
+    serdes_panel->data_mirror = of_property_read_bool(dev->of_node, "data-mirror");
     
     videomode_from_timing(&dt, &vm);
     drm_display_mode_from_videomode(&vm, &serdes_panel->mode);
@@ -318,9 +340,9 @@ static int serdes_panel_remove(struct platform_device *pdev)
 
 static const struct of_device_id serdes_panel_of_match[] = {
     { .compatible =  "maxim,max96752-panel", },
-    { .compatible =  "ti,ds90uh928-panel", },
-    { .compatible =  "ti,ds90uh968-panel", },
-    { .compatible =  "aim,aim916x-panel", },
+    { .compatible =  "ti,ds90uh928-panel",   },
+    { .compatible =  "ti,ds90uh968-panel",   },
+    { .compatible =  "aim,aim916x-panel",    },
     { }
 };
 
@@ -333,6 +355,7 @@ static struct platform_driver serdes_panel_driver = {
     .remove = serdes_panel_remove,
 };
 
+#if 0
 static int __init serdes_panel_init(void)
 {
     return platform_driver_register(&serdes_panel_driver);
@@ -344,6 +367,9 @@ static void __exit serdes_panel_exit(void)
     platform_driver_unregister(&serdes_panel_driver);
 }
 module_exit(serdes_panel_exit);
+#endif
+module_platform_driver(serdes_panel_driver);
+
 
 MODULE_AUTHOR("weigenyin");
 MODULE_DESCRIPTION("drm panel interface for different serdes");

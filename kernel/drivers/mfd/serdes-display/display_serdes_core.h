@@ -283,6 +283,9 @@ struct serdes_panel {
     const char *name;
     u32 width_mm;
     u32 height_mm;
+    u32 bus_format;
+    bool data_mirror;
+
     u32 link_rate;
     u32 lane_count;
     bool ssc;
