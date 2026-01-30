@@ -23,6 +23,7 @@
 #include <linux/sys_soc.h>
 
 #include "renesas-cpg-mssr.h"
+#include "rcar-cpg-lib.h"
 #include "rcar-gen3-cpg.h"
 
 #define CPG_PLLECR		0x00d0
@@ -36,65 +37,19 @@
 #define CPG_RCKCR_CKSEL	BIT(15)	/* RCLK Clock Source Select */
 
 static u32 cpg_quirks;
-#define PLL_ERRATA		BIT(0)	/* Missing PLL0/2/4 post-divider */
-#define RCKCR_CKSEL		BIT(1)	/* Resverd RCLK clock soruce select */
-#define SD_SKIP_FIRST		BIT(2)  /* Skip first clock in SD table */
-#define ZG_PARENT_PLL0		BIT(3)	/* Use PLL0 as ZG clock parent */
-#define SD_HS400_4TAP		BIT(4)	/* SDnCKCR 4TAP Setting */
 
+#define PLL_ERRATA	BIT(0)		/* Missing PLL0/2/4 post-divider */
+#define RCKCR_CKSEL	BIT(1)		/* Manual RCLK parent selection */
+#define SD_SKIP_FIRST	BIT(2)		/* Skip first clock in SD table */
+#define ZG_PARENT_PLL0	BIT(3)		/* Use PLL0 as ZG clock parent */
+#define SD_HS400_4TAP	BIT(4)		/* SDnCKCR 4TAP Setting */
 /*
  * Z2: SYS-CPU divider 2 on V3H seems to be fixed to 1/2 and 1 on V3M.
  * It is not 100% clear from the User's Manual but at least
  * FRQCRC register is missed on V3x.
  */
-#define Z2_SYSCPU_1		BIT(5)  /* Z2 is fixed with SYS-CPU divider 2 set to 1   - V3M */
-#define Z2_SYSCPU_2		BIT(6)  /* Z2 is fixed with SYS-CPU divider 2 set to 1/2 - V3H */
-
-static spinlock_t cpg_lock;
-
-static void cpg_reg_modify(void __iomem *reg, u32 clear, u32 set)
-{
-	unsigned long flags;
-	u32 val;
-
-	spin_lock_irqsave(&cpg_lock, flags);
-	val = readl(reg);
-	val &= ~clear;
-	val |= set;
-	writel(val, reg);
-	spin_unlock_irqrestore(&cpg_lock, flags);
-};
-
-struct cpg_simple_notifier {
-	struct notifier_block nb;
-	void __iomem *reg;
-	u32 saved;
-};
-
-static int cpg_simple_notifier_call(struct notifier_block *nb,
-				    unsigned long action, void *data)
-{
-	struct cpg_simple_notifier *csn =
-		container_of(nb, struct cpg_simple_notifier, nb);
-
-	switch (action) {
-	case PM_EVENT_SUSPEND:
-		csn->saved = readl(csn->reg);
-		return NOTIFY_OK;
-
-	case PM_EVENT_RESUME:
-		writel(csn->saved, csn->reg);
-		return NOTIFY_OK;
-	}
-	return NOTIFY_DONE;
-}
-
-static void cpg_simple_notifier_register(struct raw_notifier_head *notifiers,
-					 struct cpg_simple_notifier *csn)
-{
-	csn->nb.notifier_call = cpg_simple_notifier_call;
-	raw_notifier_chain_register(notifiers, &csn->nb);
-}
+#define Z2_SYSCPU_1	BIT(5)	/* Z2 is fixed with SYS-CPU divider 2 set to 1   - V3M */
+#define Z2_SYSCPU_2	BIT(6)	/* Z2 is fixed with SYS-CPU divider 2 set to 1/2 - V3H */
 
 /* PLL0 Clock and PLL2 Clock */
 struct cpg_pll_clk {
@@ -220,7 +175,8 @@ static struct clk * __init cpg_pll_clk_register(const char *name,
  * Traits of this clock:
  * prepare - clk_prepare only ensures that parents are prepared
  * enable - clk_enable only ensures that parents are enabled
- * rate - rate is adjustable.  clk->rate = (parent->rate * mult / 32 ) / 2
+ * rate - rate is adjustable.
+ *        clk->rate = (parent->rate * mult / 32 ) / fixed_div
  * parent - fixed parent.  No clk_set_parent support
  */
 #define CPG_FRQCRB			0x00000004
@@ -233,9 +189,11 @@ struct cpg_z_clk {
 	struct clk_hw hw;
 	void __iomem *reg;
 	void __iomem *kick_reg;
-	unsigned long mask;
+	unsigned long max_rate;		/* Maximum rate for normal mode */
 	unsigned int fixed_div;
 	unsigned long max_freq;
+	u32 mask;
+
 };
 
 #define to_z_clk(_hw)	container_of(_hw, struct cpg_z_clk, hw)
@@ -267,7 +225,18 @@ static int cpg_z_clk_determine_rate(struct clk_hw *hw,
 {
 	struct cpg_z_clk *zclk = to_z_clk(hw);
 	unsigned int min_mult, max_mult, mult;
-	unsigned long prate;
+	unsigned long rate, prate;
+
+	rate = min(req->rate, req->max_rate);
+	if (rate <= zclk->max_rate) {
+		/* Set parent rate to initial value for normal modes */
+		prate = zclk->max_rate;
+	} else {
+		/* Set increased parent rate for boost modes */
+		prate = rate;
+	}
+	req->best_parent_rate = clk_hw_round_rate(clk_hw_get_parent(hw),
+						  prate * zclk->fixed_div);
 
 	prate = req->best_parent_rate / zclk->fixed_div;
 	min_mult = max(div64_ul(req->min_rate * 32ULL, prate), 1ULL);
@@ -275,10 +244,10 @@ static int cpg_z_clk_determine_rate(struct clk_hw *hw,
 	if (max_mult < min_mult)
 		return -EINVAL;
 
-	mult = div64_ul(req->rate * 32ULL, prate);
+	mult = DIV_ROUND_CLOSEST_ULL(rate * 32ULL, prate);
 	mult = clamp(mult, min_mult, max_mult);
 
-	req->rate = div_u64((u64)prate * mult, 32);
+	req->rate = DIV_ROUND_CLOSEST_ULL((u64)prate * mult, 32);
 	return 0;
 }
 
@@ -302,8 +271,7 @@ static int cpg_z_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 	if (readl(zclk->kick_reg) & CPG_FRQCRB_KICK)
 		return -EBUSY;
 
-	cpg_reg_modify(zclk->reg, zclk->mask,
-		       ((32 - mult) << __ffs(zclk->mask)) & zclk->mask);
+	cpg_reg_modify(zclk->reg, zclk->mask, (32 - mult) << __ffs(zclk->mask));
 
 	/*
 	 * Set KICK bit in FRQCRB to update hardware setting and wait for
@@ -316,7 +284,7 @@ static int cpg_z_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 	 *
 	 * Using experimental measurements, it seems that no more than
 	 * ~10 iterations are needed, independently of the CPU rate.
-	 * Since this value might be dependent of external xtal rate, pll1
+	 * Since this value might be dependent on external xtal rate, pll1
 	 * rate or even the other emulation clocks rate, use 1000 as a
 	 * "super" safe value.
 	 */
@@ -342,7 +310,7 @@ static struct clk * __init cpg_z_clk_register(const char *name,
 					      unsigned int div,
 					      unsigned int offset)
 {
-	struct clk_init_data init;
+	struct clk_init_data init = {};
 	struct cpg_z_clk *zclk;
 	struct clk *clk, *parent;
 
@@ -352,7 +320,7 @@ static struct clk * __init cpg_z_clk_register(const char *name,
 
 	init.name = name;
 	init.ops = &cpg_z_clk_ops;
-	init.flags = 0;
+	init.flags = CLK_SET_RATE_PARENT;
 	init.parent_names = &parent_name;
 	init.num_parents = 1;
 	init.flags = CLK_SET_RATE_PARENT;
@@ -515,243 +483,13 @@ static struct clk * __init cpg_zg_pll0_clk_register(const char *name,
 	zclk->fixed_div = div; /* PLLVCO x 1/div x 3DGE divider */
 
 	clk = clk_register(NULL, &zclk->hw);
-	if (IS_ERR(clk))
+	if (IS_ERR(clk)) {
 		kfree(zclk);
-
-	return clk;
-}
-
-/*
- * SDn Clock
- */
-#define CPG_SD_STP_HCK		BIT(9)
-#define CPG_SD_STP_CK		BIT(8)
-
-#define CPG_SD_STP_MASK		(CPG_SD_STP_HCK | CPG_SD_STP_CK)
-#define CPG_SD_FC_MASK		(0x7 << 2 | 0x3 << 0)
-
-#define CPG_SD_DIV_TABLE_DATA(stp_hck, stp_ck, sd_srcfc, sd_fc, sd_div) \
-{ \
-	.val = ((stp_hck) ? CPG_SD_STP_HCK : 0) | \
-	       ((stp_ck) ? CPG_SD_STP_CK : 0) | \
-	       ((sd_srcfc) << 2) | \
-	       ((sd_fc) << 0), \
-	.div = (sd_div), \
-}
-
-struct sd_div_table {
-	u32 val;
-	unsigned int div;
-};
-
-struct sd_clock {
-	struct clk_hw hw;
-	const struct sd_div_table *div_table;
-	struct cpg_simple_notifier csn;
-	unsigned int div_num;
-	unsigned int cur_div_idx;
-	bool hs400_4taps;
-};
-
-/* SDn divider
- *                     sd_srcfc   sd_fc   div
- * stp_hck   stp_ck    (div)      (div)     = sd_srcfc x sd_fc
- *-------------------------------------------------------------------
- *  0         0         0 (1)      1 (4)      4 : SDR104 / HS200 / HS400
- *  0         0         1 (2)      1 (4)      8 : SDR50
- *  1         0         2 (4)      1 (4)     16 : HS / SDR25
- *  1         0         3 (8)      1 (4)     32 : NS / SDR12
- *  1         0         4 (16)     1 (4)     64
- *  0         0         0 (1)      0 (2)      2
- *  0         0         1 (2)      0 (2)      4
- *  1         0         2 (4)      0 (2)      8
- *  1         0         3 (8)      0 (2)     16
- *  1         0         4 (16)     0 (2)     32
- *
- *  NOTE: There is a quirk option to ignore the first row of the dividers
- *  table when searching for suitable settings. This is because HS400 on
- *  early ES versions of H3 and M3-W requires a specific setting to work.
- */
-static const struct sd_div_table cpg_sd_div_table[] = {
-/*	CPG_SD_DIV_TABLE_DATA(stp_hck,  stp_ck,   sd_srcfc,   sd_fc,  sd_div) */
-	CPG_SD_DIV_TABLE_DATA(0,        0,        0,          1,        4),
-	CPG_SD_DIV_TABLE_DATA(0,        0,        1,          1,        8),
-	CPG_SD_DIV_TABLE_DATA(1,        0,        2,          1,       16),
-	CPG_SD_DIV_TABLE_DATA(1,        0,        3,          1,       32),
-	CPG_SD_DIV_TABLE_DATA(1,        0,        4,          1,       64),
-	CPG_SD_DIV_TABLE_DATA(0,        0,        0,          0,        2),
-	CPG_SD_DIV_TABLE_DATA(0,        0,        1,          0,        4),
-	CPG_SD_DIV_TABLE_DATA(1,        0,        2,          0,        8),
-	CPG_SD_DIV_TABLE_DATA(1,        0,        3,          0,       16),
-	CPG_SD_DIV_TABLE_DATA(1,        0,        4,          0,       32),
-};
-
-#define to_sd_clock(_hw) container_of(_hw, struct sd_clock, hw)
-
-static int cpg_sd_clock_enable(struct clk_hw *hw)
-{
-	struct sd_clock *clock = to_sd_clock(hw);
-
-	cpg_reg_modify(clock->csn.reg, CPG_SD_STP_MASK,
-		       clock->div_table[clock->cur_div_idx].val &
-		       CPG_SD_STP_MASK);
-
-	return 0;
-}
-
-static void cpg_sd_clock_disable(struct clk_hw *hw)
-{
-	struct sd_clock *clock = to_sd_clock(hw);
-
-	cpg_reg_modify(clock->csn.reg, 0, CPG_SD_STP_MASK);
-}
-
-static int cpg_sd_clock_is_enabled(struct clk_hw *hw)
-{
-	struct sd_clock *clock = to_sd_clock(hw);
-
-	return !(readl(clock->csn.reg) & CPG_SD_STP_MASK);
-}
-
-static unsigned long cpg_sd_clock_recalc_rate(struct clk_hw *hw,
-						unsigned long parent_rate)
-{
-	struct sd_clock *clock = to_sd_clock(hw);
-
-	return DIV_ROUND_CLOSEST(parent_rate,
-				 clock->div_table[clock->cur_div_idx].div);
-}
-
-static int cpg_sd_clock_determine_rate(struct clk_hw *hw,
-				       struct clk_rate_request *req)
-{
-	unsigned long best_rate = ULONG_MAX, diff_min = ULONG_MAX;
-	struct sd_clock *clock = to_sd_clock(hw);
-	unsigned long calc_rate, diff;
-	unsigned int i;
-
-	for (i = 0; i < clock->div_num; i++) {
-		calc_rate = DIV_ROUND_CLOSEST(req->best_parent_rate,
-					      clock->div_table[i].div);
-		if (calc_rate < req->min_rate || calc_rate > req->max_rate)
-			continue;
-
-		diff = calc_rate > req->rate ? calc_rate - req->rate
-					     : req->rate - calc_rate;
-		if (diff < diff_min) {
-			best_rate = calc_rate;
-			diff_min = diff;
-		}
+		return clk;
 	}
 
-	if (best_rate == ULONG_MAX)
-		return -EINVAL;
-
-	req->rate = best_rate;
-	return 0;
-}
-
-static int cpg_sd_clock_set_rate(struct clk_hw *hw, unsigned long rate,
-				 unsigned long parent_rate)
-{
-	struct sd_clock *clock = to_sd_clock(hw);
-	unsigned int i;
-
-	for (i = 0; i < clock->div_num; i++)
-		if (rate == DIV_ROUND_CLOSEST(parent_rate,
-					      clock->div_table[i].div))
-			break;
-
-	if (i >= clock->div_num)
-		return -EINVAL;
-
-	clock->cur_div_idx = i;
-
-	cpg_reg_modify(clock->csn.reg, CPG_SD_STP_MASK | CPG_SD_FC_MASK,
-		       clock->div_table[i].val &
-		       (CPG_SD_STP_MASK | CPG_SD_FC_MASK));
-
-	return 0;
-}
-
-/*
- * W/A for R-Car Gen3 SDHI
- * degrees: 0=HS200, 1=HS400
- */
-static int cpg_sd_clock_set_phase(struct clk_hw *hw, int degrees)
-{
-	struct sd_clock *clock = to_sd_clock(hw);
-	u32 val = clock->div_table[clock->cur_div_idx].val;
-
-	if (!(clock->hs400_4taps))
-		return 0;
-
-	val &= ~CPG_SD_FC_MASK;
-	if (degrees == 1)
-		val |= 0x0004;	/* HS400: SRCFC=1, FC=0 */
-	else
-		val |= 0x0001;	/* HS200: SRCFC=0, FC=1 */
-
-	cpg_reg_modify(clock->csn.reg, CPG_SD_STP_MASK | CPG_SD_FC_MASK,
-		       val & (CPG_SD_STP_MASK | CPG_SD_FC_MASK));
-
-	return 0;
-}
-
-static const struct clk_ops cpg_sd_clock_ops = {
-	.enable = cpg_sd_clock_enable,
-	.disable = cpg_sd_clock_disable,
-	.is_enabled = cpg_sd_clock_is_enabled,
-	.recalc_rate = cpg_sd_clock_recalc_rate,
-	.determine_rate = cpg_sd_clock_determine_rate,
-	.set_rate = cpg_sd_clock_set_rate,
-	.set_phase = cpg_sd_clock_set_phase,
-};
-
-static struct clk * __init cpg_sd_clk_register(const char *name,
-	void __iomem *base, unsigned int offset, const char *parent_name,
-	struct raw_notifier_head *notifiers)
-{
-	struct clk_init_data init;
-	struct sd_clock *clock;
-	struct clk *clk;
-	u32 val;
-
-	clock = kzalloc(sizeof(*clock), GFP_KERNEL);
-	if (!clock)
-		return ERR_PTR(-ENOMEM);
-
-	init.name = name;
-	init.ops = &cpg_sd_clock_ops;
-	init.flags = CLK_SET_RATE_PARENT;
-	init.parent_names = &parent_name;
-	init.num_parents = 1;
-
-	clock->csn.reg = base + offset;
-	clock->hw.init = &init;
-	clock->div_table = cpg_sd_div_table;
-	clock->div_num = ARRAY_SIZE(cpg_sd_div_table);
-
-	if (cpg_quirks & SD_SKIP_FIRST) {
-		clock->div_table++;
-		clock->div_num--;
-	}
-
-	clock->hs400_4taps = cpg_quirks & SD_HS400_4TAP;
-
-	val = readl(clock->csn.reg) & ~CPG_SD_FC_MASK;
-	val |= CPG_SD_STP_MASK | (clock->div_table[0].val & CPG_SD_FC_MASK);
-	writel(val, clock->csn.reg);
-
-	clk = clk_register(NULL, &clock->hw);
-	if (IS_ERR(clk))
-		goto free_clock;
-
-	cpg_simple_notifier_register(notifiers, &clock->csn);
-	return clk;
-
-free_clock:
-	kfree(clock);
+	zclk->max_rate = clk_hw_get_rate(clk_hw_get_parent(&zclk->hw)) /
+			 zclk->fixed_div;
 	return clk;
 }
 
@@ -941,7 +679,9 @@ struct clk * __init rcar_gen3_cpg_clk_register(struct device *dev,
 
 	case CLK_TYPE_GEN3_SD:
 		return cpg_sd_clk_register(core->name, base, core->offset,
-					   __clk_get_name(parent), notifiers);
+					   __clk_get_name(parent), notifiers,
+					   cpg_quirks & SD_SKIP_FIRST,
+					   cpg_quirks & SD_HS400_4TAP);
 
 	case CLK_TYPE_GEN3_R:
 		if (cpg_quirks & RCKCR_CKSEL) {

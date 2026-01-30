@@ -549,6 +549,10 @@ static const struct of_device_id rcar_gen3_phy_usb2_match_table[] = {
 		.data = &rcar_gen3_phy_usb2_ops,
 	},
 	{
+		.compatible = "renesas,usb2-phy-r8a77961",
+		.data = &rcar_gen3_phy_usb2_ops,
+	},
+	{
 		.compatible = "renesas,usb2-phy-r8a77965",
 		.data = &rcar_gen3_phy_usb2_ops,
 	},
@@ -664,8 +668,10 @@ static int rcar_gen3_phy_usb2_probe(struct platform_device *pdev)
 	 */
 	pm_runtime_enable(dev);
 	phy_usb2_ops = of_device_get_match_data(dev);
-	if (!phy_usb2_ops)
-		return -EINVAL;
+	if (!phy_usb2_ops) {
+		ret = -EINVAL;
+		goto error;
+	}
 
 	mutex_init(&channel->lock);
 	for (i = 0; i < NUM_OF_PHYS; i++) {

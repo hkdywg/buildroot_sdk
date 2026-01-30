@@ -385,7 +385,7 @@ config SYSC_R8A774B1
 
 config RCAR_POWER_AVS
 	bool "Renesas R-Car Gen3 AVS (Adaptive Voltage Scaling)"
-	depends on ARCH_R8A7795 || ARCH_R8A7796
+	depends on ARCH_R8A77951 || ARCH_R8A77960 || ARCH_R8A77961
 	default y
 	help
 	  Enable this option if you want to have support for AVS on R-Car Gen3.

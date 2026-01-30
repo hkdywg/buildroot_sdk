@@ -27,4 +27,3 @@ obj-$(CONFIG_DRM_NWL_MIPI_DSI) += nwl-dsi.o
 obj-y += analogix/
 obj-y += cadence/
 obj-y += synopsys/
-obj-y += zj-max96781.o

@@ -653,7 +653,8 @@ static unsigned int rvin_ratio_to_bwidth(unsigned int ratio)
 
 static bool rvin_gen3_need_scaling(struct rvin_dev *vin)
 {
-	if (vin->info->model != RCAR_GEN3)
+	if (vin->info->model != RCAR_GEN3 ||
+	    vin->format.pixelformat == V4L2_PIX_FMT_NV12)
 		return false;
 
 	return vin->crop.width != vin->compose.width ||
@@ -711,8 +712,23 @@ static void rvin_crop_scale_comp(struct rvin_dev *vin)
 	/* Set Start/End Pixel/Line Pre-Clip */
 	rvin_write(vin, vin->crop.left, VNSPPRC_REG);
 	rvin_write(vin, vin->crop.left + vin->crop.width - 1, VNEPPRC_REG);
-	rvin_write(vin, vin->crop.top, VNSLPRC_REG);
-	rvin_write(vin, vin->crop.top + vin->crop.height - 1, VNELPRC_REG);
+
+	switch (vin->format.field) {
+	case V4L2_FIELD_INTERLACED_TB:
+	case V4L2_FIELD_INTERLACED_BT:
+	case V4L2_FIELD_INTERLACED:
+	case V4L2_FIELD_SEQ_TB:
+	case V4L2_FIELD_SEQ_BT:
+		rvin_write(vin, vin->crop.top / 2, VNSLPRC_REG);
+		rvin_write(vin, (vin->crop.top + vin->crop.height) / 2 - 1,
+			   VNELPRC_REG);
+		break;
+	default:
+		rvin_write(vin, vin->crop.top, VNSLPRC_REG);
+		rvin_write(vin, vin->crop.top + vin->crop.height - 1,
+			   VNELPRC_REG);
+		break;
+	}
 
 	if (vin->info->model == RCAR_GEN3)
 		rvin_crop_scale_comp_gen3(vin);
@@ -1390,8 +1406,10 @@ static int rvin_mc_validate_format(struct rvin_dev *vin, struct v4l2_subdev *sd,
 		return -EPIPE;
 	}
 
-	vin->crop.width = fmt.format.width;
-	vin->crop.height = fmt.format.height;
+	if (vin->crop.width == 0)
+		vin->crop.width = fmt.format.width;
+	if (vin->crop.height == 0)
+		vin->crop.height = fmt.format.height;
 
 	if (rvin_gen3_need_scaling(vin)) {
 		const struct rvin_group_scaler *scaler;
@@ -1421,10 +1439,17 @@ static int rvin_mc_validate_format(struct rvin_dev *vin, struct v4l2_subdev *sd,
 				return -EBUSY;
 		}
 	} else {
-		if (fmt.format.width != vin->format.width ||
-		    fmt.format.height != vin->format.height ||
-		    fmt.format.code != vin->mbus_code)
-			return -EPIPE;
+		if (vin->format.pixelformat == V4L2_PIX_FMT_NV12) {
+			if (ALIGN(fmt.format.width, 32) != vin->format.width ||
+			    ALIGN(fmt.format.height, 32) != vin->format.height ||
+			    fmt.format.code != vin->mbus_code)
+				return -EPIPE;
+		} else {
+			if (fmt.format.width != vin->format.width ||
+			    fmt.format.height != vin->format.height ||
+			    fmt.format.code != vin->mbus_code)
+				return -EPIPE;
+		}
 	}
 
 	return 0;
@@ -1504,8 +1529,7 @@ static int rvin_start_streaming(struct vb2_queue *vq, unsigned int count)
 		return -ENOMEM;
 	}
 
-	if (vin->info->use_mc)
-		pm_runtime_get_sync(vin->dev);
+	pm_runtime_get_sync(vin->dev);
 
 	ret = rvin_set_stream(vin, 1);
 	if (ret) {
@@ -1530,8 +1554,7 @@ static int rvin_start_streaming(struct vb2_queue *vq, unsigned int count)
 
 	return 0;
 out:
-	if (vin->info->use_mc)
-		pm_runtime_put(vin->dev);
+	pm_runtime_put(vin->dev);
 
 	if (ret)
 		dma_free_coherent(vin->dev, vin->format.sizeimage, vin->scratch,
@@ -1614,8 +1637,6 @@ static void rvin_stop_streaming(struct vb2_queue *vq)
 			usleep_range(10, 15);
 			timeout--;
 		}
-		reset_control_assert(vin->rstc);
-		reset_control_deassert(vin->rstc);
 	}
 
 	/* Free scratch buffer. */
@@ -1700,8 +1721,6 @@ void rvin_suspend_stop_streaming(struct rvin_dev *vin)
 			usleep_range(10, 15);
 			timeout--;
 		}
-		reset_control_assert(vin->rstc);
-		reset_control_deassert(vin->rstc);
 	}
 
 	vin->suspend = true;

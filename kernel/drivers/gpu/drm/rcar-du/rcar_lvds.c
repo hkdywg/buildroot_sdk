@@ -609,7 +609,6 @@ static void rcar_lvds_atomic_enable(struct drm_bridge *bridge,
 	struct drm_atomic_state *state = old_bridge_state->base.state;
 	struct drm_connector *connector;
 	struct drm_crtc *crtc;
-    printk("hanrp: %s %d\n", __func__, __LINE__);
 
 	connector = drm_atomic_get_new_connector_for_encoder(state,
 							     bridge->encoder);
@@ -623,7 +622,6 @@ static void rcar_lvds_atomic_disable(struct drm_bridge *bridge,
 {
 	struct rcar_lvds *lvds = bridge_to_rcar_lvds(bridge);
 	u32 lvdcr0 = 0;
-    printk("hanrp: %s %d\n", __func__, __LINE__);
 
 	if (lvds->panel) {
 		drm_panel_disable(lvds->panel);
@@ -935,7 +933,6 @@ static int rcar_lvds_probe(struct platform_device *pdev)
 	struct rcar_lvds *lvds;
 	struct resource *mem;
 	int ret;
-    printk("hanrp: %s %d\n", __func__, __LINE__);
 
 	lvds = devm_kzalloc(&pdev->dev, sizeof(*lvds), GFP_KERNEL);
 	if (lvds == NULL)
@@ -974,7 +971,6 @@ static int rcar_lvds_probe(struct platform_device *pdev)
 	}
 
 	drm_bridge_add(&lvds->bridge);
-    printk("hanrp: %s %d\n", __func__, __LINE__);
 
 	return 0;
 }

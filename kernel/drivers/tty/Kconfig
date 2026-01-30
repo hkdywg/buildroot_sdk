@@ -12,8 +12,7 @@ if TTY
 
 config VT
 	bool "Virtual terminal" if EXPERT
-	# LJX 20201104 ADD LJX_VT_CFG
-	depends on !UML && LJX_VT_CFG
+	depends on !UML
 	select INPUT
 	default y
 	help

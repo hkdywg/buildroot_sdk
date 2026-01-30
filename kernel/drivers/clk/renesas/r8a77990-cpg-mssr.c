@@ -125,10 +125,15 @@ static const struct cpg_core_clk r8a77990_core_clks[] __initconst = {
 };
 
 static const struct mssr_mod_clk r8a77990_mod_clks[] __initconst = {
-	DEF_MOD("rt-dmac1",		  16,	R8A77990_CLK_S0D3),
-	DEF_MOD("rt-dmac0",		  21,	R8A77990_CLK_S0D3),
-	DEF_MOD("3dge",			 112,	R8A77990_CLK_ZG),
+	DEF_MOD("rt-dmac1",               16,   R8A77990_CLK_S0D3),
+	DEF_MOD("rt-dmac0",               21,   R8A77990_CLK_S0D3),
+	DEF_MOD("3dge",                  112,   R8A77990_CLK_ZG),
 	DEF_MOD("fdp1-0",		 119,	R8A77990_CLK_S0D1),
+	DEF_MOD("tmu4",			 121,	R8A77990_CLK_S0D6C),
+	DEF_MOD("tmu3",			 122,	R8A77990_CLK_S3D2C),
+	DEF_MOD("tmu2",			 123,	R8A77990_CLK_S3D2C),
+	DEF_MOD("tmu1",			 124,	R8A77990_CLK_S3D2C),
+	DEF_MOD("tmu0",			 125,	R8A77990_CLK_CP),
 	DEF_MOD("vcplf",		 130,	R8A77990_CLK_S3D1),
 	DEF_MOD("vdpb",			 131,	R8A77990_CLK_S3D1),
 	DEF_MOD("scif5",		 202,	R8A77990_CLK_S3D4C),
@@ -199,6 +204,7 @@ static const struct mssr_mod_clk r8a77990_mod_clks[] __initconst = {
 	DEF_MOD("vin5",			 806,	R8A77990_CLK_S1D2),
 	DEF_MOD("vin4",			 807,	R8A77990_CLK_S1D2),
 	DEF_MOD("etheravb",		 812,	R8A77990_CLK_S3D2),
+	DEF_MOD("imr0",			 823,	R8A77990_CLK_S1D2),
 
 	DEF_MOD("gpio6",		 906,	R8A77990_CLK_S3D4),
 	DEF_MOD("gpio5",		 907,	R8A77990_CLK_S3D4),
@@ -232,6 +238,7 @@ static const struct mssr_mod_clk r8a77990_mod_clks[] __initconst = {
 	DEF_MOD("ssi2",			1013,	MOD_CLK_ID(1005)),
 	DEF_MOD("ssi1",			1014,	MOD_CLK_ID(1005)),
 	DEF_MOD("ssi0",			1015,	MOD_CLK_ID(1005)),
+	DEF_MOD("dab",			1016,	R8A77990_CLK_S3D1),
 	DEF_MOD("scu-all",		1017,	R8A77990_CLK_S3D4),
 	DEF_MOD("scu-dvc1",		1018,	MOD_CLK_ID(1017)),
 	DEF_MOD("scu-dvc0",		1019,	MOD_CLK_ID(1017)),

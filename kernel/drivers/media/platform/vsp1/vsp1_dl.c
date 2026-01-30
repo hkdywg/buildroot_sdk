@@ -2,7 +2,7 @@
 /*
  * vsp1_dl.c  --  R-Car VSP1 Display List
  *
- * Copyright (C) 2015-2018 Renesas Corporation
+ * Copyright (C) 2015-2021 Renesas Corporation
  *
  * Contact: Laurent Pinchart (laurent.pinchart@ideasonboard.com)
  */

@@ -92,6 +92,12 @@ static unsigned int cc_get_sgl_nents(struct device *dev,
 }
 
 /**
+ * cc_buffer_is_phy_cont()
+ *
+ * @dev: Device object
+ * @sg_list: SG list
+ * @nbytes: [IN] Total SGL data bytes.
+ *
  * This function check the if all entry of scatter-gather list
  * is in continuous physical memory area.
  * Checking by:
