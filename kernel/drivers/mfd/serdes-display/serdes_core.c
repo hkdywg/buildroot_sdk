@@ -252,9 +252,11 @@ int serdes_set_pinctrl_default(struct serdes *serdes)
     int ret = 0;
 
     if((!IS_ERR(serdes->pinctrl_node)) && (!IS_ERR(serdes->pins_init))) {
-        ret = pinctrl_select_state(serdes->pinctrl_node, serdes->pins_init);
-        if(ret)
-            dev_err(serdes->dev, "could not set init pins\n");
+        if(serdes->pinctrl_node && serdes->pins_init) {
+            ret = pinctrl_select_state(serdes->pinctrl_node, serdes->pins_init);
+            if(ret)
+                dev_err(serdes->dev, "could not set init pins\n");
+        }
         SERDES_DBG_MFD("%s: name = %s init\n", __func__, dev_name(serdes->dev));
     }
 
@@ -267,9 +269,11 @@ int serdes_set_pinctrl_sleep(struct serdes *serdes)
     int ret = 0;
 
     if((!IS_ERR(serdes->pinctrl_node)) && (!IS_ERR(serdes->pins_sleep))) {
-        ret = pinctrl_select_state(serdes->pinctrl_node, serdes->pins_sleep);
-        if(ret)
-            dev_err(serdes->dev, "could not set init pins\n");
+        if(serdes->pinctrl_node && serdes->pins_sleep) {
+            ret = pinctrl_select_state(serdes->pinctrl_node, serdes->pins_sleep);
+            if(ret)
+                dev_err(serdes->dev, "could not set init pins\n");
+        }
         SERDES_DBG_MFD("%s: name = %s init\n", __func__, dev_name(serdes->dev));
     }
 
@@ -314,9 +318,11 @@ void serdes_device_poweroff(struct serdes *serdes)
     int ret = 0;
 
     if((!IS_ERR(serdes->pinctrl_node)) && (!IS_ERR(serdes->pins_sleep))) {
-        ret = pinctrl_select_state(serdes->pinctrl_node, serdes->pins_sleep);
-        if(ret) 
-            dev_err(serdes->dev, "could not set sleep pins\n");
+        if(serdes->pinctrl_node && serdes->pins_sleep) {
+            ret = pinctrl_select_state(serdes->pinctrl_node, serdes->pins_sleep);
+            if(ret) 
+                dev_err(serdes->dev, "could not set sleep pins\n");
+        }
     }
 
     if(!IS_ERR(serdes->vpower)) {
