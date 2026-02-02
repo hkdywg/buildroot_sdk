@@ -96,12 +96,16 @@ static int serdes_panel_get_modes(struct drm_panel *panel,
     struct drm_display_mode *mode;
     u32 bus_format = serdes_panel->bus_format;
     int ret = 1;
-printk("---------------sss\n");
+
     connector->display_info.width_mm = serdes_panel->width_mm;
     connector->display_info.height_mm = serdes_panel->height_mm;
     drm_display_info_set_bus_formats(&connector->display_info, &bus_format, 1);
 
     mode = drm_mode_duplicate(connector->dev, &serdes_panel->mode);
+    if (!mode) {
+        dev_err(serdes->dev, "Failed to duplicate mode\n");
+        return 0;
+    }
     mode->width_mm = serdes_panel->width_mm;
     mode->height_mm = serdes_panel->height_mm;
     mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
@@ -355,7 +359,6 @@ static struct platform_driver serdes_panel_driver = {
     .remove = serdes_panel_remove,
 };
 
-#if 0
 static int __init serdes_panel_init(void)
 {
     return platform_driver_register(&serdes_panel_driver);
@@ -367,9 +370,6 @@ static void __exit serdes_panel_exit(void)
     platform_driver_unregister(&serdes_panel_driver);
 }
 module_exit(serdes_panel_exit);
-#endif
-module_platform_driver(serdes_panel_driver);
-
 
 MODULE_AUTHOR("weigenyin");
 MODULE_DESCRIPTION("drm panel interface for different serdes");

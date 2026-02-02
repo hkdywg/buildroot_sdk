@@ -57,6 +57,25 @@ static struct mipi_dsi_device *serdes_attach_dsi(struct serdes_bridge *serdes_br
     return dsi;
 }
 
+static int connector_get_modes(struct drm_connector *connector)
+{
+    struct serdes_bridge *serdes_bridge = container_of(connector, struct serdes_bridge, connector);
+
+    return serdes_bridge->base_bridge.funcs->get_modes(&serdes_bridge->base_bridge, connector);
+}
+
+static const struct drm_connector_helper_funcs serdes_bridge_conn_helper_funcs = {
+    .get_modes = connector_get_modes,
+};
+
+static const struct drm_connector_funcs serdes_bridge_conn_funcs = {
+    .atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
+    .atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+    .reset = drm_atomic_helper_connector_reset,
+    .fill_modes = drm_helper_probe_single_connector_modes,
+    .destroy = drm_connector_cleanup,
+};
+
 static int serdes_bridge_attach(struct drm_bridge *bridge,
                         enum drm_bridge_attach_flags flags)
 {
@@ -83,6 +102,35 @@ static int serdes_bridge_attach(struct drm_bridge *bridge,
 
     if(serdes->chip_data->bridge_ops->attach)
         ret = serdes->chip_data->bridge_ops->attach(serdes);
+
+    if (flags & DRM_BRIDGE_ATTACH_NO_CONNECTOR) {
+        return ret;
+    }
+
+    if (!bridge->encoder) {
+        dev_err(serdes_bridge->dev, "Missing encoder\n");
+        return -ENODEV;
+    }
+
+    if (!serdes_bridge->next_bridge) {
+        struct drm_connector *connector = &serdes_bridge->connector;
+
+        ret = drm_connector_init(bridge->dev, connector, &serdes_bridge_conn_funcs,
+                                 bridge->type);
+        if (ret) {
+            dev_err(serdes_bridge->dev, "Failed to initialize connector\n");
+            return ret;
+        }
+
+        drm_connector_helper_add(connector, &serdes_bridge_conn_helper_funcs);
+
+        ret = drm_connector_attach_encoder(connector, bridge->encoder);
+        if (ret) {
+            dev_err(serdes_bridge->dev, "Failed to attach connector to encoder\n");
+            drm_connector_cleanup(connector);
+            return ret;
+        }
+    }
 
     return ret;
 }
@@ -206,20 +254,30 @@ static int serdes_bridge_get_modes(struct drm_bridge *bridge,
     struct serdes_bridge *serdes_bridge = to_serdes_bridge(bridge);
     struct serdes *serdes = serdes_bridge->parent;
     int ret = 0;
+    int num_modes = 0;
 
-    if(serdes->chip_data->bridge_ops->get_modes)
+    if(serdes->chip_data->bridge_ops->get_modes) {
         ret = serdes->chip_data->bridge_ops->get_modes(serdes);
+        if (ret > 0)
+            num_modes += ret;
+    }
 
-    if(serdes_bridge->next_bridge)
+    if(serdes_bridge->next_bridge) {
         ret = drm_bridge_get_modes(serdes_bridge->next_bridge, connector);
+        if (ret > 0)
+            num_modes += ret;
+    }
 
-    if(serdes_bridge->panel)
+    if(serdes_bridge->panel) {
         ret = drm_panel_get_modes(serdes_bridge->panel, connector);
+        if (ret > 0)
+            num_modes += ret;
+    }
 
     SERDES_DBG_MFD("%s:%s %s, node = %s\n", __func__, dev_name(serdes->dev),
             serdes->chip_data->name, serdes_bridge->dev->of_node->name);
-
-    return ret;
+    
+    return num_modes;
 }
 
 static const struct drm_bridge_funcs serdes_bridge_funcs = {
@@ -231,7 +289,7 @@ static const struct drm_bridge_funcs serdes_bridge_funcs = {
     .enable = serdes_bridge_enable,
     .detect = serdes_bridge_detect,
     .get_modes = serdes_bridge_get_modes,
-    .atomic_get_input_bus_fmts = drm_atomic_helper_bridge_propagate_bus_fmt,
+    // .atomic_get_input_bus_fmts = drm_atomic_helper_bridge_propagate_bus_fmt,
     .atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
     .atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
     .atomic_reset = drm_atomic_helper_bridge_reset,
