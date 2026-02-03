@@ -256,7 +256,7 @@ static int serdes_panel_parse_dt(struct serdes_panel *serdes_panel)
 
     ret = of_property_read_string(dev->of_node, "data-mapping", &mapping);
     if(ret < 0 ) {
-        dev_err(dev, "%pOF: invalid of missing %d DT property\n", 
+        dev_err(dev, "%pOF: invalid of missing %s DT property\n", 
                 dev->of_node, "data-mapping");
         return -ENODEV;
     }
