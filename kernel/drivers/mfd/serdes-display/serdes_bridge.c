@@ -61,7 +61,10 @@ static int connector_get_modes(struct drm_connector *connector)
 {
     struct serdes_bridge *serdes_bridge = container_of(connector, struct serdes_bridge, connector);
 
-    return serdes_bridge->base_bridge.funcs->get_modes(&serdes_bridge->base_bridge, connector);
+    if(serdes_bridge->base_bridge.funcs->get_modes)
+        return serdes_bridge->base_bridge.funcs->get_modes(&serdes_bridge->base_bridge, connector);
+    else 
+        return 0;
 }
 
 static const struct drm_connector_helper_funcs serdes_bridge_conn_helper_funcs = {
@@ -289,7 +292,7 @@ static const struct drm_bridge_funcs serdes_bridge_funcs = {
     .enable = serdes_bridge_enable,
     .detect = serdes_bridge_detect,
     .get_modes = serdes_bridge_get_modes,
-    // .atomic_get_input_bus_fmts = drm_atomic_helper_bridge_propagate_bus_fmt,
+    .atomic_get_input_bus_fmts = drm_atomic_helper_bridge_propagate_bus_fmt,
     .atomic_duplicate_state = drm_atomic_helper_bridge_duplicate_state,
     .atomic_destroy_state = drm_atomic_helper_bridge_destroy_state,
     .atomic_reset = drm_atomic_helper_bridge_reset,
