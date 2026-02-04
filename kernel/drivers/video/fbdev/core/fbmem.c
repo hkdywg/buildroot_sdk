@@ -1580,7 +1580,7 @@ static void do_remove_conflicting_framebuffers(struct apertures_struct *a,
 	}
 }
 
-static bool lockless_register_fb;
+static bool lockless_register_fb = 1;
 module_param_named_unsafe(lockless_register_fb, lockless_register_fb, bool, 0400);
 MODULE_PARM_DESC(lockless_register_fb,
 	"Lockless framebuffer registration for debugging [default=off]");
