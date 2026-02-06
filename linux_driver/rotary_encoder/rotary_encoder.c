@@ -25,12 +25,12 @@
 #include <linux/poll.h>
 
 #define ENCODER_BUF_SIZE    3
+#define ENCODER_FIFO_DEPTH  16
+#define DEBOUNCE_MS         20
+
+struct rotary_encoder_drvdata;
 
 struct rotary_encoder_channel {
-	// default map
-	//{ 384, 385 }, /* GPIO6_4   GPIO6_5  */
-	//{ 386, 387 }, /* GPIO6_6   GPIO6_7  */
-	//{ 390, 393 }, /* GPIO6_10  GPIO6_13 */
 	int phase_a_gpio;
 	int phase_b_gpio;
 	int irq;
@@ -47,7 +47,10 @@ struct rotary_encoder_drvdata {
 	int num_channels;
 
 	spinlock_t lock;
-	u8 report_buf[ENCODER_BUF_SIZE]; /* [irq_num, phase_a_gpio_val, phase_b_gpio_val] */
+	/* FIFO buffer to store events: [irq_num, phase_a_val, phase_b_val] */
+	u8 fifo[ENCODER_FIFO_DEPTH][ENCODER_BUF_SIZE];
+	int head;
+	int tail;
 	
 	struct fasync_struct *fasync;
 	wait_queue_head_t read_wait;
@@ -56,11 +59,33 @@ struct rotary_encoder_drvdata {
 static void encoder_timer_callback(struct timer_list *t)
 {
 	struct rotary_encoder_channel *ch = from_timer(ch, t, timer);
+	struct rotary_encoder_drvdata *drvdata = ch->drvdata;
 	unsigned long flags;
+	int next_head;
 
-	spin_lock_irqsave(&ch->drvdata->lock, flags);
+	spin_lock_irqsave(&drvdata->lock, flags);
+
+	next_head = (drvdata->head + 1) % ENCODER_FIFO_DEPTH;
+	if (next_head == drvdata->tail) {
+		/* FIFO full, drop the oldest event to make room for new one */
+		drvdata->tail = (drvdata->tail + 1) % ENCODER_FIFO_DEPTH;
+		dev_warn(drvdata->dev, "Encoder FIFO full, dropping oldest event\n");
+	}
+
+	/* Store event in FIFO: IRQ number helps identify which knob moved */
+	drvdata->fifo[drvdata->head][0] = ch->irq;
+	drvdata->fifo[drvdata->head][1] = gpio_get_value(ch->phase_a_gpio);
+	drvdata->fifo[drvdata->head][2] = gpio_get_value(ch->phase_b_gpio);
+	
+	drvdata->head = next_head;
+
+	/* Re-enable sampling */
 	ch->ready_to_sample = true;
-	spin_unlock_irqrestore(&ch->drvdata->lock, flags);
+	spin_unlock_irqrestore(&drvdata->lock, flags);
+
+	/* Notify userspace */
+	kill_fasync(&drvdata->fasync, SIGIO, POLL_IN);
+	wake_up_interruptible(&drvdata->read_wait);
 }
 
 static irqreturn_t rotary_encoder_irq_handler(int irq, void *dev_id)
@@ -76,22 +101,11 @@ static irqreturn_t rotary_encoder_irq_handler(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
-	/* Disable sampling until timer expires */
+	/* Disable sampling and start debounce timer */
 	ch->ready_to_sample = false;
-
-	/* Update report buffer */
-	drvdata->report_buf[0] = irq;
-	drvdata->report_buf[1] = gpio_get_value(ch->phase_a_gpio);
-	drvdata->report_buf[2] = gpio_get_value(ch->phase_b_gpio);
+	mod_timer(&ch->timer, jiffies + msecs_to_jiffies(DEBOUNCE_MS));
 
 	spin_unlock_irqrestore(&drvdata->lock, flags);
-
-	/* Restart debounce timer */
-	mod_timer(&ch->timer, jiffies + msecs_to_jiffies(20));
-
-	/* Notify userspace */
-	kill_fasync(&drvdata->fasync, SIGIO, POLL_IN);
-	wake_up_interruptible(&drvdata->read_wait);
 
 	return IRQ_HANDLED;
 }
@@ -99,26 +113,47 @@ static irqreturn_t rotary_encoder_irq_handler(int irq, void *dev_id)
 static ssize_t rotary_encoder_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
 	struct rotary_encoder_drvdata *drvdata = container_of(file->private_data, struct rotary_encoder_drvdata, misc);
-	unsigned long flags;
 	u8 tmp_buf[ENCODER_BUF_SIZE];
 	int ret;
 
 	if (size != ENCODER_BUF_SIZE)
 		return -EINVAL;
 
-	spin_lock_irqsave(&drvdata->lock, flags);
-	memcpy(tmp_buf, drvdata->report_buf, ENCODER_BUF_SIZE);
-	/* Reset buffer after read */
-	drvdata->report_buf[0] = 0xFF;
-	drvdata->report_buf[1] = 0xFF;
-	drvdata->report_buf[2] = 0xFF;
-	spin_unlock_irqrestore(&drvdata->lock, flags);
+	/* Check if FIFO is empty */
+	while (drvdata->head == drvdata->tail) {
+		
+		if (file->f_flags & O_NONBLOCK)
+			return -EAGAIN;
+			
+		if (wait_event_interruptible(drvdata->read_wait, 
+				drvdata->head != drvdata->tail))
+			return -ERESTARTSYS;
+	}
 
+	/* Read from FIFO */
+	memcpy(tmp_buf, drvdata->fifo[drvdata->tail], ENCODER_BUF_SIZE);
+	drvdata->tail = (drvdata->tail + 1) % ENCODER_FIFO_DEPTH;
+	
 	ret = copy_to_user(buf, tmp_buf, ENCODER_BUF_SIZE);
 	if (ret)
 		return -EFAULT;
 
 	return ENCODER_BUF_SIZE;
+}
+
+static __poll_t rotary_encoder_poll(struct file *file, poll_table *wait)
+{
+	struct rotary_encoder_drvdata *drvdata = container_of(file->private_data, struct rotary_encoder_drvdata, misc);
+	__poll_t mask = 0;
+
+	poll_wait(file, &drvdata->read_wait, wait);
+
+	spin_lock_irq(&drvdata->lock);
+	if (drvdata->head != drvdata->tail)
+		mask |= POLLIN | POLLRDNORM;
+	spin_unlock_irq(&drvdata->lock);
+
+	return mask;
 }
 
 static int rotary_encoder_fasync(int fd, struct file *file, int on)
@@ -130,6 +165,7 @@ static int rotary_encoder_fasync(int fd, struct file *file, int on)
 static const struct file_operations rotary_encoder_fops = {
 	.owner   = THIS_MODULE,
 	.read    = rotary_encoder_read,
+	.poll    = rotary_encoder_poll,
 	.fasync  = rotary_encoder_fasync,
 	.llseek  = no_llseek,
 };
@@ -164,15 +200,15 @@ static int rotary_encoder_probe(struct platform_device *pdev)
 	spin_lock_init(&drvdata->lock);
 	init_waitqueue_head(&drvdata->read_wait);
 	
-	/* Initialize report buffer to default state */
-	memset(drvdata->report_buf, 0xFF, ENCODER_BUF_SIZE);
+	/* Initialize FIFO */
+	drvdata->head = 0;
+	drvdata->tail = 0;
 
 	for (i = 0; i < drvdata->num_channels; i++) {
 		struct rotary_encoder_channel *ch = &drvdata->channels[i];
 		int phase_a_gpio, phase_b_gpio;
 		int idx_a = i * 2;
 		int idx_b = i * 2 + 1;
-
 		char *label_a, *label_b, *label_irq;
 
 		phase_a_gpio = of_get_gpio_flags(node, idx_a, &flags);
@@ -183,9 +219,10 @@ static int rotary_encoder_probe(struct platform_device *pdev)
 			return -EINVAL;
 		}
 
-		label_a = devm_kasprintf(dev, GFP_KERNEL, "encoder_ch%d_a", i);
-		label_b = devm_kasprintf(dev, GFP_KERNEL, "encoder_ch%d_b", i);
-		label_irq = devm_kasprintf(dev, GFP_KERNEL, "encoder_ch%d_irq", i);
+		/* Generate unique labels for each channel to avoid conflicts */
+		label_a = devm_kasprintf(dev, GFP_KERNEL, "rotary_ch%d_a", i);
+		label_b = devm_kasprintf(dev, GFP_KERNEL, "rotary_ch%d_b", i);
+		label_irq = devm_kasprintf(dev, GFP_KERNEL, "rotary_ch%d_irq", i);
 		
 		if (!label_a || !label_b || !label_irq)
 			return -ENOMEM;
@@ -234,7 +271,7 @@ static int rotary_encoder_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, drvdata);
-	dev_info(dev, "Rotary encoder driver initialized with %d channels\n", count);
+	dev_info(dev, "Rotary encoder driver initialized with %d channels\n", drvdata->num_channels);
 
 	return 0;
 }
@@ -273,4 +310,3 @@ module_platform_driver(rotary_encoder_driver);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("weigenyin <weigenyin@zjautomotive.com>");
 MODULE_DESCRIPTION("Rotary Encoder Driver");
-
