@@ -1,4 +1,4 @@
-obj-m += test_drv.o
+obj-m += rotary_encoder.o
 
 PWD := $(shell pwd)
 
