@@ -7,6 +7,18 @@
 
 #include <dt-bindings/gpio/gpio.h>
 
+/ {
+    rotary_encoder {
+        compatible = "newversion,rotary_encoder";
+
+        gpios = <&gpio6 4 GPIO_ACTIVE_LOW>, <&gpio6 5 GPIO_ACTIVE_LOW>,
+                <&gpio6 6 GPIO_ACTIVE_LOW>, <&gpio6 7 GPIO_ACTIVE_LOW>,
+                <&gpio6 10 GPIO_ACTIVE_LOW>, <&gpio6 13 GPIO_ACTIVE_LOW>;
+        
+        status = "okay";
+    };
+};
+
 &lvds0 {
 	status = "okay";
 	//mode = "dual-link";
@@ -191,8 +203,6 @@
     			vfront-porch = <4>;
     			vback-porch = <4>;
     			vsync-len = <2>;
-    			hsync-active = <1>;                                
-    			vsync-active = <1>;                                
     		};
     		port {
     			i2c0_max96752_from_max96781: endpoint {
