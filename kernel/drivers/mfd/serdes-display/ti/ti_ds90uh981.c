@@ -750,10 +750,19 @@ static int ds90uh981_bridge_disable(struct serdes *serdes)
     return 0;
 }
 
+static void ds90uh981_bridge_mode_set(struct serdes *serdes,
+                                      const struct drm_display_mode *mode,
+                                      const struct drm_display_mode *adjusted_mode)
+{
+    SERDES_DBG_CHIP("%s: clock=%d hdisplay=%d vdisplay=%d\n", __func__,
+                    mode->clock, mode->hdisplay, mode->vdisplay);
+}
+
 static struct serdes_chip_bridge_ops ds90uh981_bridge_ops = {
     .init = ds90uh981_bridge_init,
     .attach = ds90uh981_bridge_attach,
     .detect = ds90uh981_bridge_detect,
+    .mode_set = ds90uh981_bridge_mode_set,
     .enable = ds90uh981_bridge_enable,
     .disable = ds90uh981_bridge_disable,
 };

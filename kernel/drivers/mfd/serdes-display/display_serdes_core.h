@@ -160,6 +160,8 @@ struct serdes_chip_bridge_ops {
     int (*attach)(struct serdes *serdes);
     enum drm_connector_status (*detect)(struct serdes *serdes);
     int (*get_modes)(struct serdes *serdes);
+    void (*mode_set)(struct serdes *serdes, const struct drm_display_mode *mode,
+                     const struct drm_display_mode *adjusted_mode);
     int (*pre_enable)(struct serdes *serdes);
     int (*enable)(struct serdes *serdes);
     int (*disable)(struct serdes *serdes);

@@ -283,9 +283,23 @@ static int serdes_bridge_get_modes(struct drm_bridge *bridge,
     return num_modes;
 }
 
+static void serdes_bridge_mode_set(struct drm_bridge *bridge,
+                                   const struct drm_display_mode *mode,
+                                   const struct drm_display_mode *adjusted_mode)
+{
+    struct serdes_bridge *serdes_bridge = to_serdes_bridge(bridge);
+    struct serdes *serdes = serdes_bridge->parent;
+
+    drm_mode_copy(&serdes_bridge->mode, adjusted_mode);
+
+    if (serdes->chip_data->bridge_ops->mode_set)
+        serdes->chip_data->bridge_ops->mode_set(serdes, mode, adjusted_mode);
+}
+
 static const struct drm_bridge_funcs serdes_bridge_funcs = {
     .attach = serdes_bridge_attach,
     .detach = serdes_bridge_detach,
+    .mode_set = serdes_bridge_mode_set,
     .disable = serdes_bridge_disable,
     .post_disable = serdes_bridge_post_disable,
     .pre_enable = serdes_bridge_pre_enable,
