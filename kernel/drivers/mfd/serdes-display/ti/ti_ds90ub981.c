@@ -10,6 +10,14 @@
 #include "../display_serdes_core.h"
 #include "ti_ds90ub981.h"
 
+struct pll_reg_config {
+    u8 ch0_ndiv[2];
+    u8 ch0_num[3];
+    u8 ch0_den[3];
+    u8 ch0_pdiv;
+    u8 mash_order;
+};
+
 static const struct regmap_range ds90ub981_bridge_volatile_ranges[] = {
     { .range_min = 0, .range_max = 0xFF },
 };
@@ -391,6 +399,194 @@ static struct serdes_chip_pinctrl_info ds90ub981_pinctrl_info = {
     .num_functions = ARRAY_SIZE(ds90ub981_functions_desc),
 };
 
+static void rational_best_approximation(u64 given_numerator, u64 given_denominator,
+				u64 max_numerator, u64 max_denominator,
+				u64 *best_numerator, u64 *best_denominator)
+{
+    u64 n, d, n0, d0, n1, d1;
+
+    n = given_numerator;
+    d = given_denominator;
+    n0 = 0;
+    d0 = 1;
+    n1 = 1;
+    d1 = 0;
+
+    for (;;) {
+        u64 a, t;
+
+        if (d == 0)
+            break;
+
+        a = n / d;
+
+        t = n0 + a * n1;
+        n0 = n1;
+        n1 = t;
+
+        t = d0 + a * d1;
+        d0 = d1;
+        d1 = t;
+
+        if (d1 > max_denominator) {
+            /* If we exceeded the max denominator, back off */
+            n1 = n0;
+            d1 = d0;
+            break;
+        }
+
+        if ((n % d) == 0)
+            break;
+
+        t = n % d;
+        n = d;
+        d = t;
+    }
+    *best_numerator = n1;
+    *best_denominator = d1;
+}
+
+
+/**
+ * calculate_pll - Calculate PLL register settings
+ * @target_pclk_hz: Target Pixel Clock in Hz
+ * @ref_freq_hz: Reference Frequency in Hz
+ * @port_num: Port number (0 or 1)
+ * @fpd_mode: FPD Link Mode (0=FPD3, 1=FPD4)
+ * @config: Pointer to output configuration structure
+ *
+ * Returns 0 on success, negative error code on failure.
+ */
+static int calculate_pll(u64 target_pclk_hz, u64 ref_freq_hz,
+			 int port_num, int fpd_mode,
+			 struct pll_reg_config *config)
+{
+	int p_divs[] = {1, 2, 4, 8, 16, 32};
+	int p_codes[] = {0x0, 0x0, 0xE0, 0xF0, 0xF8, 0xFC}; // Mapped codes
+	int num_p_divs = sizeof(p_divs) / sizeof(p_divs[0]);
+	
+	/* Best solution tracking */
+	int best_p_idx = -1;
+	u64 best_n = 0;
+	u64 best_num = 0;
+	u64 best_den = 1;
+	u64 best_score = (u64)-1; /* Lower is better */
+	bool solution_found = false;
+
+	int i;
+	
+	u64 output_freq_hz;
+	u64 pdf_hz;
+
+	/* 
+	 * FPD3: output_freq = PCLK * 35 / 2
+	 * PDF = Ref * 2
+	 */
+	if (fpd_mode == 0) { // FPD3
+		/* Use * 35 / 2. To avoid precision loss, * 35 then / 2 */
+		output_freq_hz = (target_pclk_hz * 35) / 2;
+	} else {
+		// FPD4 placeholder (assumes target_pclk is rate)
+		output_freq_hz = target_pclk_hz; 
+	}
+
+	pdf_hz = ref_freq_hz * 2;
+
+	/* 
+	 * Search strategy:
+	 * Iterate P dividers.
+	 * Calculate required VCO freq = OutputFreq * P.
+	 * Check if VCO is within range.
+	 * Calculate divider N and fraction Num/Den using PDF.
+	 */
+
+	for (i = 0; i < num_p_divs; i++) {
+		int p = p_divs[i];
+		u64 vco_freq, n, rem, num, den, score;
+
+		vco_freq = output_freq_hz * p;
+
+		/* Check VCO range */
+		if (vco_freq < SPEC_MIN_VCO_FREQ_HZ || 
+		    vco_freq > SPEC_MAX_VCO_FREQ_HZ)
+			continue;
+
+		/* Calculate Divider */
+		/* ratio = VCO / PDF */
+		n = vco_freq / pdf_hz;
+		rem = vco_freq % pdf_hz;
+		
+		num = 0;
+		den = 1;
+
+		if (rem == 0) {
+			/* Integer solution */
+			num = 0;
+			den = 1;
+			score = 0; /* Best possible score */
+		} else {
+			/* Fractional solution */
+			/* We have fraction rem/pdf_hz */
+			rational_best_approximation(rem, pdf_hz,
+						    SPEC_MAX_DENOMINATOR,
+						    SPEC_MAX_DENOMINATOR,
+						    &num, &den);
+			
+			/* Score: prefer smaller denominators */
+			score = den + num;
+		}
+
+		/* 
+		 * Update best solution.
+		 */
+		if (!solution_found || score < best_score) {
+			best_score = score;
+			best_p_idx = i;
+			best_n = n;
+			best_num = num;
+			best_den = den;
+			solution_found = true;
+		}
+	}
+
+	if (!solution_found) {
+		pr_err("No valid PLL solution found for Target=%llu Hz, Ref=%llu Hz\n",
+		       target_pclk_hz, ref_freq_hz);
+		return -1;
+	}
+
+	/* Scale fraction to maximize dynamic range if fractional */
+	if (best_num != 0) {
+		u64 scale = SPEC_MAX_DENOMINATOR / best_den;
+		best_num *= scale;
+		best_den *= scale;
+	}
+
+	pr_info("Selected Solution: VCO=%llu Hz, P=%d, N=%llu, Num=%llu, Den=%llu\n",
+		output_freq_hz * p_divs[best_p_idx], 
+		p_divs[best_p_idx], best_n, best_num, best_den);
+
+	/* Map to registers */
+	config->ch0_ndiv[0] = (u8)(best_n & 0xFF);
+	config->ch0_ndiv[1] = (u8)((best_n >> 8) & 0x0F); 
+
+	config->ch0_num[0] = (u8)(best_num & 0xFF);
+	config->ch0_num[1] = (u8)((best_num >> 8) & 0xFF);
+	config->ch0_num[2] = (u8)((best_num >> 16) & 0xFF);
+
+	config->ch0_den[0] = (u8)(best_den & 0xFF);
+	config->ch0_den[1] = (u8)((best_den >> 8) & 0xFF);
+	config->ch0_den[2] = (u8)((best_den >> 16) & 0xFF);
+
+	config->ch0_pdiv = (u8)p_codes[best_p_idx];
+
+	if (best_num == 0)
+		config->mash_order = 0x00; 
+	else
+		config->mash_order = 0x08; 
+
+	return 0;
+}
 static int ds90ub981_bridge_init(struct serdes *serdes)
 {
     extcon_set_state(serdes->extcon, EXTCON_JACK_VIDEO_OUT, true);

@@ -13,6 +13,11 @@
 
 #include <linux/bitfield.h>
 
+/* Hardware Specifications */
+#define SPEC_MIN_VCO_FREQ_HZ    3499000000ULL
+#define SPEC_MAX_VCO_FREQ_HZ    7001000000ULL
+#define SPEC_MAX_DENOMINATOR    16777206ULL
+
 #define GPIO_A_REG(gpio)    (0x0200 + ((gpio) * 8))
 #define GPIO_B_REG(gpio)    (0x0201 + ((gpio) * 8))
 #define GPIO_C_REG(gpio)    (0x0202 + ((gpio) * 8))
