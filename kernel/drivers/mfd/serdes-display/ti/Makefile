@@ -3,4 +3,4 @@
 # maxim display serdes drivers configuration
 #
 
-obj-y    += ti_ds90ub981.o 
+obj-y    += ti_ds90uh981.o 

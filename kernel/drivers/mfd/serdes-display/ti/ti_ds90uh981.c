@@ -1,6 +1,6 @@
 /*
-* ti_ds90ub981.c 
-*	driver for ds90ub981
+* ti_ds90uh981.c 
+*	driver for ds90uh981
 *
 * @copyright Copyright (c) 2022 Jiangsu New Vision Automotive Electronics Co.，Ltd. All rights reserved.
 *
@@ -8,7 +8,7 @@
 *
 */
 #include "../display_serdes_core.h"
-#include "ti_ds90ub981.h"
+#include "ti_ds90uh981.h"
 
 struct pll_reg_config {
     u8 ch0_ndiv[2];
@@ -18,21 +18,21 @@ struct pll_reg_config {
     u8 mash_order;
 };
 
-static const struct regmap_range ds90ub981_bridge_volatile_ranges[] = {
+static const struct regmap_range ds90uh981_bridge_volatile_ranges[] = {
     { .range_min = 0, .range_max = 0xFF },
 };
 
-static const struct regmap_access_table ds90ub981_bridge_volatile_table = {
-    .yes_ranges = ds90ub981_bridge_volatile_ranges,
-    .n_yes_ranges = ARRAY_SIZE(ds90ub981_bridge_volatile_ranges),
+static const struct regmap_access_table ds90uh981_bridge_volatile_table = {
+    .yes_ranges = ds90uh981_bridge_volatile_ranges,
+    .n_yes_ranges = ARRAY_SIZE(ds90uh981_bridge_volatile_ranges),
 };
 
-static struct regmap_config ds90ub981_regmap_config = {
-    .name = "ds90ub981",
+static struct regmap_config ds90uh981_regmap_config = {
+    .name = "ds90uh981",
     .reg_bits = 8,
     .val_bits = 8,
     .max_register = 0x8000,
-    .volatile_table = &ds90ub981_bridge_volatile_table,
+    .volatile_table = &ds90uh981_bridge_volatile_table,
     .cache_type = REGCACHE_RBTREE,
 };
 
@@ -58,37 +58,37 @@ struct serdes_group_data {
     int num_configs;
 };
 
-static int ds90ub981_mfp0_pins[] = {0}; 
-static int ds90ub981_mfp1_pins[] = {1}; 
-static int ds90ub981_mfp2_pins[] = {2}; 
-static int ds90ub981_mfp3_pins[] = {3}; 
-static int ds90ub981_mfp4_pins[] = {4}; 
-static int ds90ub981_mfp5_pins[] = {5}; 
-static int ds90ub981_mfp6_pins[] = {6}; 
-static int ds90ub981_mfp7_pins[] = {7}; 
+static int ds90uh981_mfp0_pins[] = {0}; 
+static int ds90uh981_mfp1_pins[] = {1}; 
+static int ds90uh981_mfp2_pins[] = {2}; 
+static int ds90uh981_mfp3_pins[] = {3}; 
+static int ds90uh981_mfp4_pins[] = {4}; 
+static int ds90uh981_mfp5_pins[] = {5}; 
+static int ds90uh981_mfp6_pins[] = {6}; 
+static int ds90uh981_mfp7_pins[] = {7}; 
 
-static int ds90ub981_mfp8_pins[] = {8}; 
-static int ds90ub981_mfp9_pins[] = {9}; 
-static int ds90ub981_mfp10_pins[] = {10}; 
-static int ds90ub981_mfp11_pins[] = {11}; 
-static int ds90ub981_mfp12_pins[] = {12}; 
-static int ds90ub981_mfp13_pins[] = {13}; 
-static int ds90ub981_mfp14_pins[] = {14}; 
-static int ds90ub981_mfp15_pins[] = {15}; 
+static int ds90uh981_mfp8_pins[] = {8}; 
+static int ds90uh981_mfp9_pins[] = {9}; 
+static int ds90uh981_mfp10_pins[] = {10}; 
+static int ds90uh981_mfp11_pins[] = {11}; 
+static int ds90uh981_mfp12_pins[] = {12}; 
+static int ds90uh981_mfp13_pins[] = {13}; 
+static int ds90uh981_mfp14_pins[] = {14}; 
+static int ds90uh981_mfp15_pins[] = {15}; 
 
-static int ds90ub981_mfp16_pins[] = {16}; 
-static int ds90ub981_mfp17_pins[] = {17}; 
-static int ds90ub981_mfp18_pins[] = {18}; 
-static int ds90ub981_mfp19_pins[] = {19}; 
-static int ds90ub981_mfp20_pins[] = {20}; 
-static int ds90ub981_mfp21_pins[] = {21}; 
-static int ds90ub981_mfp22_pins[] = {22}; 
-static int ds90ub981_mfp23_pins[] = {23}; 
+static int ds90uh981_mfp16_pins[] = {16}; 
+static int ds90uh981_mfp17_pins[] = {17}; 
+static int ds90uh981_mfp18_pins[] = {18}; 
+static int ds90uh981_mfp19_pins[] = {19}; 
+static int ds90uh981_mfp20_pins[] = {20}; 
+static int ds90uh981_mfp21_pins[] = {21}; 
+static int ds90uh981_mfp22_pins[] = {22}; 
+static int ds90uh981_mfp23_pins[] = {23}; 
 
-static int ds90ub981_mfp24_pins[] = {24}; 
-static int ds90ub981_mfp25_pins[] = {25}; 
-static int ds90ub981_i2c_pins[] = {3, 7}; 
-static int ds90ub981_uart_pins[] = {3, 7}; 
+static int ds90uh981_mfp24_pins[] = {24}; 
+static int ds90uh981_mfp25_pins[] = {25}; 
+static int ds90uh981_i2c_pins[] = {3, 7}; 
+static int ds90uh981_uart_pins[] = {3, 7}; 
 
 #define GROUP_DESC(nm) \
 { \
@@ -108,37 +108,37 @@ static int ds90ub981_uart_pins[] = {3, 7};
     }, \
 }
 
-static const struct config_desc ds90ub981_mfp13_configs[] = {
+static const struct config_desc ds90uh981_mfp13_configs[] = {
     { 0x0005, PU_LF0, 0 },
 };
 
-static const struct config_desc ds90ub981_mfp14_configs[] = {
+static const struct config_desc ds90uh981_mfp14_configs[] = {
     { 0x0005, PU_LF1, 0 },
 };
 
-static const struct config_desc ds90ub981_mfp15_configs[] = {
+static const struct config_desc ds90uh981_mfp15_configs[] = {
     { 0x0005, PU_LF2, 0 },
 };
 
-static const struct config_desc ds90ub981_mfp16_configs[] = {
+static const struct config_desc ds90uh981_mfp16_configs[] = {
     { 0x0005, PU_LF3, 0 },
 };
 
 static const char *serdes_gpio_groups[] = {
-    "ds90ub981_mfp0", "ds90ub981_mfp1", "ds90ub981_mfp2", "ds90ub981_mfp3",
-    "ds90ub981_mfp4", "ds90ub981_mfp5", "ds90ub981_mfp6", "ds90ub981_mfp7",
+    "ds90uh981_mfp0", "ds90uh981_mfp1", "ds90uh981_mfp2", "ds90uh981_mfp3",
+    "ds90uh981_mfp4", "ds90uh981_mfp5", "ds90uh981_mfp6", "ds90uh981_mfp7",
 
-    "ds90ub981_mfp8", "ds90ub981_mfp9", "ds90ub981_mfp10", "ds90ub981_mfp11",
-    "ds90ub981_mfp12", "ds90ub981_mfp13", "ds90ub981_mfp14", "ds90ub981_mfp15",
+    "ds90uh981_mfp8", "ds90uh981_mfp9", "ds90uh981_mfp10", "ds90uh981_mfp11",
+    "ds90uh981_mfp12", "ds90uh981_mfp13", "ds90uh981_mfp14", "ds90uh981_mfp15",
 
-    "ds90ub981_mfp16", "ds90ub981_mfp17", "ds90ub981_mfp18", "ds90ub981_mfp19",
-    "ds90ub981_mfp20", "ds90ub981_mfp21", "ds90ub981_mfp22", "ds90ub981_mfp23",
+    "ds90uh981_mfp16", "ds90uh981_mfp17", "ds90uh981_mfp18", "ds90uh981_mfp19",
+    "ds90uh981_mfp20", "ds90uh981_mfp21", "ds90uh981_mfp22", "ds90uh981_mfp23",
 
-    "ds90ub981_mfp24", "ds90ub981_mfp25",
+    "ds90uh981_mfp24", "ds90uh981_mfp25",
 };
 
-static const char *ds90ub981_i2c_groups[] = { "ds90ub981_i2c" };
-static const char *ds90ub981_uart_groups[] = { "ds90ub981_uart" };
+static const char *ds90uh981_i2c_groups[] = { "ds90uh981_i2c" };
+static const char *ds90uh981_uart_groups[] = { "ds90uh981_uart" };
 
 #define FUNCTION_DESC(nm) \
 { \
@@ -192,7 +192,7 @@ static const char *ds90ub981_uart_groups[] = { "ds90ub981_uart" };
 
 #define FUNCTION_DESC_GPIO() \
 { \
-    .name = "DS90UB981_GPIO", \
+    .name = "DS90uh981_GPIO", \
     .group_names = serdes_gpio_groups, \
     .num_group_names = ARRAY_SIZE(serdes_gpio_groups), \
     .data = (void *)(const struct serdes_function_data []) { \
@@ -200,74 +200,74 @@ static const char *ds90ub981_uart_groups[] = { "ds90ub981_uart" };
     }, \
 }
 
-static struct pinctrl_pin_desc ds90ub981_pins_desc[] = {
-    PINCTRL_PIN(DS90UB981_MFP0, "ds90ub981_mfp0"),
-    PINCTRL_PIN(DS90UB981_MFP1, "ds90ub981_mfp1"),
-    PINCTRL_PIN(DS90UB981_MFP2, "ds90ub981_mfp2"),
-    PINCTRL_PIN(DS90UB981_MFP3, "ds90ub981_mfp3"),
-    PINCTRL_PIN(DS90UB981_MFP4, "ds90ub981_mfp4"),
-    PINCTRL_PIN(DS90UB981_MFP5, "ds90ub981_mfp5"),
-    PINCTRL_PIN(DS90UB981_MFP6, "ds90ub981_mfp6"),
-    PINCTRL_PIN(DS90UB981_MFP7, "ds90ub981_mfp7"),
+static struct pinctrl_pin_desc ds90uh981_pins_desc[] = {
+    PINCTRL_PIN(DS90UH981_MFP0, "ds90uh981_mfp0"),
+    PINCTRL_PIN(DS90UH981_MFP1, "ds90uh981_mfp1"),
+    PINCTRL_PIN(DS90UH981_MFP2, "ds90uh981_mfp2"),
+    PINCTRL_PIN(DS90UH981_MFP3, "ds90uh981_mfp3"),
+    PINCTRL_PIN(DS90UH981_MFP4, "ds90uh981_mfp4"),
+    PINCTRL_PIN(DS90UH981_MFP5, "ds90uh981_mfp5"),
+    PINCTRL_PIN(DS90UH981_MFP6, "ds90uh981_mfp6"),
+    PINCTRL_PIN(DS90UH981_MFP7, "ds90uh981_mfp7"),
 
-    PINCTRL_PIN(DS90UB981_MFP8,  "ds90ub981_mfp8"),
-    PINCTRL_PIN(DS90UB981_MFP9,  "ds90ub981_mfp9"),
-    PINCTRL_PIN(DS90UB981_MFP10, "ds90ub981_mfp10"),
-    PINCTRL_PIN(DS90UB981_MFP11, "ds90ub981_mfp11"),
-    PINCTRL_PIN(DS90UB981_MFP12, "ds90ub981_mfp12"),
-    PINCTRL_PIN(DS90UB981_MFP13, "ds90ub981_mfp13"),
-    PINCTRL_PIN(DS90UB981_MFP14, "ds90ub981_mfp14"),
-    PINCTRL_PIN(DS90UB981_MFP15, "ds90ub981_mfp15"),
+    PINCTRL_PIN(DS90UH981_MFP8,  "ds90uh981_mfp8"),
+    PINCTRL_PIN(DS90UH981_MFP9,  "ds90uh981_mfp9"),
+    PINCTRL_PIN(DS90UH981_MFP10, "ds90uh981_mfp10"),
+    PINCTRL_PIN(DS90UH981_MFP11, "ds90uh981_mfp11"),
+    PINCTRL_PIN(DS90UH981_MFP12, "ds90uh981_mfp12"),
+    PINCTRL_PIN(DS90UH981_MFP13, "ds90uh981_mfp13"),
+    PINCTRL_PIN(DS90UH981_MFP14, "ds90uh981_mfp14"),
+    PINCTRL_PIN(DS90UH981_MFP15, "ds90uh981_mfp15"),
 
-    PINCTRL_PIN(DS90UB981_MFP16, "ds90ub981_mfp16"),
-    PINCTRL_PIN(DS90UB981_MFP17, "ds90ub981_mfp17"),
-    PINCTRL_PIN(DS90UB981_MFP18, "ds90ub981_mfp18"),
-    PINCTRL_PIN(DS90UB981_MFP19, "ds90ub981_mfp19"),
-    PINCTRL_PIN(DS90UB981_MFP20, "ds90ub981_mfp20"),
-    PINCTRL_PIN(DS90UB981_MFP21, "ds90ub981_mfp21"),
-    PINCTRL_PIN(DS90UB981_MFP22, "ds90ub981_mfp22"),
-    PINCTRL_PIN(DS90UB981_MFP23, "ds90ub981_mfp23"),
+    PINCTRL_PIN(DS90UH981_MFP16, "ds90uh981_mfp16"),
+    PINCTRL_PIN(DS90UH981_MFP17, "ds90uh981_mfp17"),
+    PINCTRL_PIN(DS90UH981_MFP18, "ds90uh981_mfp18"),
+    PINCTRL_PIN(DS90UH981_MFP19, "ds90uh981_mfp19"),
+    PINCTRL_PIN(DS90UH981_MFP20, "ds90uh981_mfp20"),
+    PINCTRL_PIN(DS90UH981_MFP21, "ds90uh981_mfp21"),
+    PINCTRL_PIN(DS90UH981_MFP22, "ds90uh981_mfp22"),
+    PINCTRL_PIN(DS90UH981_MFP23, "ds90uh981_mfp23"),
 
-    PINCTRL_PIN(DS90UB981_MFP24, "ds90ub981_mfp24"),
-    PINCTRL_PIN(DS90UB981_MFP25, "ds90ub981_mfp25"),
+    PINCTRL_PIN(DS90UH981_MFP24, "ds90uh981_mfp24"),
+    PINCTRL_PIN(DS90UH981_MFP25, "ds90uh981_mfp25"),
 };
 
-static struct group_desc ds90ub981_groups_desc[] = {
-    GROUP_DESC(ds90ub981_mfp0),
-    GROUP_DESC(ds90ub981_mfp1),
-    GROUP_DESC(ds90ub981_mfp2),
-    GROUP_DESC(ds90ub981_mfp3),
-    GROUP_DESC(ds90ub981_mfp4),
-    GROUP_DESC(ds90ub981_mfp5),
-    GROUP_DESC(ds90ub981_mfp6),
-    GROUP_DESC(ds90ub981_mfp7),
+static struct group_desc ds90uh981_groups_desc[] = {
+    GROUP_DESC(ds90uh981_mfp0),
+    GROUP_DESC(ds90uh981_mfp1),
+    GROUP_DESC(ds90uh981_mfp2),
+    GROUP_DESC(ds90uh981_mfp3),
+    GROUP_DESC(ds90uh981_mfp4),
+    GROUP_DESC(ds90uh981_mfp5),
+    GROUP_DESC(ds90uh981_mfp6),
+    GROUP_DESC(ds90uh981_mfp7),
 
-    GROUP_DESC(ds90ub981_mfp8),
-    GROUP_DESC(ds90ub981_mfp9),
-    GROUP_DESC(ds90ub981_mfp10),
-    GROUP_DESC(ds90ub981_mfp11),
-    GROUP_DESC(ds90ub981_mfp12),
-    GROUP_DESC(ds90ub981_mfp13),
-    GROUP_DESC(ds90ub981_mfp14),
-    GROUP_DESC(ds90ub981_mfp15),
+    GROUP_DESC(ds90uh981_mfp8),
+    GROUP_DESC(ds90uh981_mfp9),
+    GROUP_DESC(ds90uh981_mfp10),
+    GROUP_DESC(ds90uh981_mfp11),
+    GROUP_DESC(ds90uh981_mfp12),
+    GROUP_DESC(ds90uh981_mfp13),
+    GROUP_DESC(ds90uh981_mfp14),
+    GROUP_DESC(ds90uh981_mfp15),
 
-    GROUP_DESC(ds90ub981_mfp16),
-    GROUP_DESC(ds90ub981_mfp17),
-    GROUP_DESC(ds90ub981_mfp18),
-    GROUP_DESC(ds90ub981_mfp19),
-    GROUP_DESC(ds90ub981_mfp20),
-    GROUP_DESC(ds90ub981_mfp21),
-    GROUP_DESC(ds90ub981_mfp22),
-    GROUP_DESC(ds90ub981_mfp23),
+    GROUP_DESC(ds90uh981_mfp16),
+    GROUP_DESC(ds90uh981_mfp17),
+    GROUP_DESC(ds90uh981_mfp18),
+    GROUP_DESC(ds90uh981_mfp19),
+    GROUP_DESC(ds90uh981_mfp20),
+    GROUP_DESC(ds90uh981_mfp21),
+    GROUP_DESC(ds90uh981_mfp22),
+    GROUP_DESC(ds90uh981_mfp23),
 
-    GROUP_DESC(ds90ub981_mfp24),
-    GROUP_DESC(ds90ub981_mfp25),
+    GROUP_DESC(ds90uh981_mfp24),
+    GROUP_DESC(ds90uh981_mfp25),
 
-    GROUP_DESC(ds90ub981_i2c),
-    GROUP_DESC(ds90ub981_uart),
+    GROUP_DESC(ds90uh981_i2c),
+    GROUP_DESC(ds90uh981_uart),
 };
 
-static struct function_desc ds90ub981_functions_desc[] = {
+static struct function_desc ds90uh981_functions_desc[] = {
     FUNCTION_DESC_GPIO_INPUT_A(0),
     FUNCTION_DESC_GPIO_INPUT_A(1),
     FUNCTION_DESC_GPIO_INPUT_A(2),
@@ -386,17 +386,17 @@ static struct function_desc ds90ub981_functions_desc[] = {
 
     FUNCTION_DESC_GPIO(),
 
-    FUNCTION_DESC(ds90ub981_i2c),
-    FUNCTION_DESC(ds90ub981_uart),
+    FUNCTION_DESC(ds90uh981_i2c),
+    FUNCTION_DESC(ds90uh981_uart),
 };
 
-static struct serdes_chip_pinctrl_info ds90ub981_pinctrl_info = {
-    .pins = ds90ub981_pins_desc,
-    .num_pins = ARRAY_SIZE(ds90ub981_pins_desc),
-    .groups = ds90ub981_groups_desc,
-    .num_groups = ARRAY_SIZE(ds90ub981_groups_desc),
-    .functions = ds90ub981_functions_desc,
-    .num_functions = ARRAY_SIZE(ds90ub981_functions_desc),
+static struct serdes_chip_pinctrl_info ds90uh981_pinctrl_info = {
+    .pins = ds90uh981_pins_desc,
+    .num_pins = ARRAY_SIZE(ds90uh981_pins_desc),
+    .groups = ds90uh981_groups_desc,
+    .num_groups = ARRAY_SIZE(ds90uh981_groups_desc),
+    .functions = ds90uh981_functions_desc,
+    .num_functions = ARRAY_SIZE(ds90uh981_functions_desc),
 };
 
 static void rational_best_approximation(u64 given_numerator, u64 given_denominator,
@@ -588,7 +588,7 @@ static int calculate_pll(u64 target_pclk_hz, u64 ref_freq_hz,
 	return 0;
 }
 
-static int ds90ub981_bridge_init(struct serdes *serdes)
+static int ds90uh981_bridge_init(struct serdes *serdes)
 {
 	int ret;
 	int fpd_mode, pclk_freq, select_port;	
@@ -640,7 +640,7 @@ static int ds90ub981_bridge_init(struct serdes *serdes)
     return 0;
 }
 
-static bool ds90ub981_bridge_link_locked(struct serdes *serdes)
+static bool ds90uh981_bridge_link_locked(struct serdes *serdes)
 {
     u32 val = 0, i;
 
@@ -674,9 +674,9 @@ static bool ds90ub981_bridge_link_locked(struct serdes *serdes)
     return true;
 }
 
-static int ds90ub981_bridge_attach(struct serdes *serdes)
+static int ds90uh981_bridge_attach(struct serdes *serdes)
 {
-    if(ds90ub981_bridge_link_locked(serdes))
+    if(ds90uh981_bridge_link_locked(serdes))
         serdes->serdes_bridge->status = connector_status_connected;
     else
         serdes->serdes_bridge->status = connector_status_disconnected;
@@ -685,7 +685,7 @@ static int ds90ub981_bridge_attach(struct serdes *serdes)
 }
 
 static enum drm_connector_status 
-ds90ub981_bridge_detect(struct serdes *serdes)
+ds90uh981_bridge_detect(struct serdes *serdes)
 {
     struct serdes_bridge *serdes_bridge = serdes->serdes_bridge;
     enum drm_connector_status status = connector_status_connected;
@@ -693,7 +693,7 @@ ds90ub981_bridge_detect(struct serdes *serdes)
     if(!drm_kms_helper_is_poll_worker())
         return serdes_bridge->status;
     
-    if(!ds90ub981_bridge_link_locked(serdes)) {
+    if(!ds90uh981_bridge_link_locked(serdes)) {
         status = connector_status_disconnected;
         goto out;
     }
@@ -735,7 +735,7 @@ out:
     return status;
 }
 
-static int ds90ub981_bridge_enable(struct serdes *serdes)
+static int ds90uh981_bridge_enable(struct serdes *serdes)
 {
     int ret = 0;
 
@@ -745,20 +745,20 @@ static int ds90ub981_bridge_enable(struct serdes *serdes)
     return ret;
 }
 
-static int ds90ub981_bridge_disable(struct serdes *serdes)
+static int ds90uh981_bridge_disable(struct serdes *serdes)
 {
     return 0;
 }
 
-static struct serdes_chip_bridge_ops ds90ub981_bridge_ops = {
-    .init = ds90ub981_bridge_init,
-    .attach = ds90ub981_bridge_attach,
-    .detect = ds90ub981_bridge_detect,
-    .enable = ds90ub981_bridge_enable,
-    .disable = ds90ub981_bridge_disable,
+static struct serdes_chip_bridge_ops ds90uh981_bridge_ops = {
+    .init = ds90uh981_bridge_init,
+    .attach = ds90uh981_bridge_attach,
+    .detect = ds90uh981_bridge_detect,
+    .enable = ds90uh981_bridge_enable,
+    .disable = ds90uh981_bridge_disable,
 };
 
-static int ds90ub981_pinctrl_set_mux(struct serdes *serdes,
+static int ds90uh981_pinctrl_set_mux(struct serdes *serdes,
                         unsigned int function, unsigned int group)
 {
     struct serdes_pinctrl *pinctrl = serdes->pinctrl;
@@ -812,7 +812,7 @@ static int ds90ub981_pinctrl_set_mux(struct serdes *serdes,
     return 0;
 }
 
-static int ds90ub981_pinctrl_config_set(struct serdes *serdes,
+static int ds90uh981_pinctrl_config_set(struct serdes *serdes,
                         unsigned int pin, unsigned long *configs,
                         unsigned int num_configs)
 {
@@ -889,7 +889,7 @@ static int ds90ub981_pinctrl_config_set(struct serdes *serdes,
     return 0;
 }
 
-static int ds90ub981_pinctrl_config_get(struct serdes *serdes,
+static int ds90uh981_pinctrl_config_get(struct serdes *serdes,
                         unsigned int pin, unsigned long *config)
 {
     enum pin_config_param param = pinconf_to_config_param(*config);
@@ -953,140 +953,140 @@ static int ds90ub981_pinctrl_config_get(struct serdes *serdes,
     return 0;
 }
 
-static struct serdes_chip_pinctrl_ops ds90ub981_pinctrl_ops = {
-    .pin_config_get = ds90ub981_pinctrl_config_get,
-    .pin_config_set = ds90ub981_pinctrl_config_set,
-    .set_mux        = ds90ub981_pinctrl_set_mux,
+static struct serdes_chip_pinctrl_ops ds90uh981_pinctrl_ops = {
+    .pin_config_get = ds90uh981_pinctrl_config_get,
+    .pin_config_set = ds90uh981_pinctrl_config_set,
+    .set_mux        = ds90uh981_pinctrl_set_mux,
 };
 
-static int ds90ub981_gpio_direction_input(struct serdes *serdes, int gpio)
+static int ds90uh981_gpio_direction_input(struct serdes *serdes, int gpio)
 {
     return 0;
 }
 
-static int ds90ub981_gpio_direction_ouput(struct serdes *serdes, int gpio, int value)
+static int ds90uh981_gpio_direction_ouput(struct serdes *serdes, int gpio, int value)
 {
     return 0;
 }
 
-static int ds90ub981_gpio_get_level(struct serdes *serdes, int gpio)
+static int ds90uh981_gpio_get_level(struct serdes *serdes, int gpio)
 {
     return 0;
 }
 
-static int ds90ub981_gpio_set_level(struct serdes *serdes, int gpio, int value)
+static int ds90uh981_gpio_set_level(struct serdes *serdes, int gpio, int value)
 {
     return 0;
 }
 
-static int ds90ub981_gpio_set_config(struct serdes *serdes, int gpio, unsigned long config)
+static int ds90uh981_gpio_set_config(struct serdes *serdes, int gpio, unsigned long config)
 {
     return 0;
 }
 
-static int ds90ub981_gpio_to_irq(struct serdes *serdes, int gpio)
+static int ds90uh981_gpio_to_irq(struct serdes *serdes, int gpio)
 {
     return 0;
 }
 
-static struct serdes_chip_gpio_ops ds90ub981_gpio_ops = {
-    .direction_input        = ds90ub981_gpio_direction_input,
-    .direction_output       = ds90ub981_gpio_direction_ouput,
-    .get_level              = ds90ub981_gpio_get_level,
-    .set_level              = ds90ub981_gpio_set_level,
-    .set_config             = ds90ub981_gpio_set_config,
-    .to_irq                 = ds90ub981_gpio_to_irq,
+static struct serdes_chip_gpio_ops ds90uh981_gpio_ops = {
+    .direction_input        = ds90uh981_gpio_direction_input,
+    .direction_output       = ds90uh981_gpio_direction_ouput,
+    .get_level              = ds90uh981_gpio_get_level,
+    .set_level              = ds90uh981_gpio_set_level,
+    .set_config             = ds90uh981_gpio_set_config,
+    .to_irq                 = ds90uh981_gpio_to_irq,
 };
 
-static const struct check_reg_data ds90ub981_important_reg[10] = {
+static const struct check_reg_data ds90uh981_important_reg[10] = {
     {
-        "ds90ub981 LINK LOCK",
+        "ds90uh981 LINK LOCK",
         { 0x0013, (1 << 3) },
     },
     {
-        "ds90ub981 LINKA LOCK",
+        "ds90uh981 LINKA LOCK",
         { 0x002A, (1 << 3) },
     },
     {
-        "ds90ub981 X PLCK DET",
+        "ds90uh981 X PLCK DET",
         { 0x0102, (1 << 7) },
     },
     {
-        "ds90ub981 Y PLCK DET",
+        "ds90uh981 Y PLCK DET",
         { 0x0112, (1 << 7) },
     },
 };
 
-static int ds90ub981_check_reg(struct serdes *serdes)
+static int ds90uh981_check_reg(struct serdes *serdes)
 {
     int i, ret;
     unsigned int val;
 
-    for(i = 0; i < ARRAY_SIZE(ds90ub981_important_reg); i++) {
-        if(!ds90ub981_important_reg[i].seq.reg)
+    for(i = 0; i < ARRAY_SIZE(ds90uh981_important_reg); i++) {
+        if(!ds90uh981_important_reg[i].seq.reg)
             break;
 
-        ret = serdes_reg_read(serdes, ds90ub981_important_reg[i].seq.reg, &val);
-        if(!ret && !(val & ds90ub981_important_reg[i].seq.def)
+        ret = serdes_reg_read(serdes, ds90uh981_important_reg[i].seq.reg, &val);
+        if(!ret && !(val & ds90uh981_important_reg[i].seq.def)
            && (!atomic_read(&serdes->flag_early_suspend)))
             dev_info(serdes->dev, "warning %s %s reg[0x%x] = 0x%x\n", __func__,
-                     ds90ub981_important_reg[i].name,
-                     ds90ub981_important_reg[i].seq.reg, val);
+                     ds90uh981_important_reg[i].name,
+                     ds90uh981_important_reg[i].seq.reg, val);
             
     }
 
     return 0;
 }
 
-static struct serdes_check_reg_ops ds90ub981_check_reg_ops = {
-    .check_reg = ds90ub981_check_reg,
+static struct serdes_check_reg_ops ds90uh981_check_reg_ops = {
+    .check_reg = ds90uh981_check_reg,
 };
 
-static int  ds90ub981_pm_suspend(struct serdes *serdes)
+static int  ds90uh981_pm_suspend(struct serdes *serdes)
 {
     return 0;
 }
 
-static int  ds90ub981_pm_resume(struct serdes *serdes)
+static int  ds90uh981_pm_resume(struct serdes *serdes)
 {
     return 0;
 }
 
-static struct serdes_chip_pm_ops ds90ub981_pm_ops = {
-    .suspend = ds90ub981_pm_suspend,
-    .resume  = ds90ub981_pm_resume,
+static struct serdes_chip_pm_ops ds90uh981_pm_ops = {
+    .suspend = ds90uh981_pm_suspend,
+    .resume  = ds90uh981_pm_resume,
 };
 
-static int ds90ub981_irq_lock_handle(struct serdes *serdes)
+static int ds90uh981_irq_lock_handle(struct serdes *serdes)
 {
     return IRQ_HANDLED;
 }
 
-static int ds90ub981_irq_err_handle(struct serdes *serdes)
+static int ds90uh981_irq_err_handle(struct serdes *serdes)
 {
     return IRQ_HANDLED;
 }
 
-static struct serdes_chip_irq_ops ds90ub981_irq_ops = {
-    .lock_handle = ds90ub981_irq_lock_handle,
-    .err_handle  = ds90ub981_irq_err_handle,
+static struct serdes_chip_irq_ops ds90uh981_irq_ops = {
+    .lock_handle = ds90uh981_irq_lock_handle,
+    .err_handle  = ds90uh981_irq_err_handle,
 };
 
 
-struct serdes_chip_data serdes_ds90ub981_data = {
-    .name               = "ds90ub981",
+struct serdes_chip_data serdes_ds90uh981_data  = {
+    .name               = "ds90uh981",
     .serdes_type        = TYPE_SER,
     .serdes_id          = TI_ID_DS90UH981,
     .connector_type     = DRM_MODE_CONNECTOR_LVDS,
-    .regmap_config      = &ds90ub981_regmap_config,
-    .pinctrl_info       = &ds90ub981_pinctrl_info,
-    .bridge_ops         = &ds90ub981_bridge_ops,
-    .pinctrl_ops        = &ds90ub981_pinctrl_ops,
-    .gpio_ops           = &ds90ub981_gpio_ops,
-    .check_ops          = &ds90ub981_check_reg_ops,
-    .pm_ops             = &ds90ub981_pm_ops,
-    .irq_ops            = &ds90ub981_irq_ops,
+    .regmap_config      = &ds90uh981_regmap_config,
+    .pinctrl_info       = &ds90uh981_pinctrl_info,
+    .bridge_ops         = &ds90uh981_bridge_ops,
+    .pinctrl_ops        = &ds90uh981_pinctrl_ops,
+    .gpio_ops           = &ds90uh981_gpio_ops,
+    .check_ops          = &ds90uh981_check_reg_ops,
+    .pm_ops             = &ds90uh981_pm_ops,
+    .irq_ops            = &ds90uh981_irq_ops,
 };
-EXPORT_SYMBOL_GPL(serdes_ds90ub981_data);
+EXPORT_SYMBOL_GPL(serdes_ds90uh981_data);
 
 MODULE_LICENSE("GPL");
