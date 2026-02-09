@@ -754,8 +754,50 @@ static void ds90uh981_bridge_mode_set(struct serdes *serdes,
                                       const struct drm_display_mode *mode,
                                       const struct drm_display_mode *adjusted_mode)
 {
-    SERDES_DBG_CHIP("%s: clock=%d hdisplay=%d vdisplay=%d\n", __func__,
-                    mode->clock, mode->hdisplay, mode->vdisplay);
+    uint16_t h_total, h_active, h_front_porch, h_back_porch, h_sync_len;
+    uint16_t v_total, v_active, v_front_porch, v_back_porch, v_sync_len;
+
+    /* program ds90uh981 VP pages */
+    if(!adjusted_mode) {
+        h_total = adjusted_mode->htotal;
+        v_total = adjusted_mode->vtotal;
+        h_active = adjusted_mode->hdisplay;
+        v_active = adjusted_mode->vdisplay;
+        h_front_porch = adjusted_mode->hsync_start - adjusted_mode->hdisplay; 
+        v_front_porch = adjusted_mode->vsync_start - adjusted_mode->vdisplay; 
+        h_sync_len = adjusted_mode->hsync_end - adjusted_mode->hsync_start; 
+        v_sync_len = adjusted_mode->vsync_end - adjusted_mode->vsync_start; 
+        h_back_porch = adjusted_mode->htotal - adjusted_mode->hsync_end; 
+        v_back_porch = adjusted_mode->vtotal - adjusted_mode->vsync_end; 
+
+		serdes_reg_write(serdes, 0x40, 0x32);   // select page 12
+		serdes_reg_write(serdes, 0x41, 0x02);
+		serdes_reg_write(serdes, 0x42, h_active & 0xFF);
+		serdes_reg_write(serdes, 0x42, (h_active & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x41, 0x10);
+		serdes_reg_write(serdes, 0x42, h_active & 0xFF);
+		serdes_reg_write(serdes, 0x42, (h_active & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x42, h_back_porch & 0xFF);
+		serdes_reg_write(serdes, 0x42, (h_back_porch & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x42, h_sync_len & 0xFF);
+		serdes_reg_write(serdes, 0x42, (h_sync_len & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x42, h_total & 0xFF);
+		serdes_reg_write(serdes, 0x42, (h_total & 0xFF00) >> 8);
+
+		serdes_reg_write(serdes, 0x42, v_total & 0xFF);
+		serdes_reg_write(serdes, 0x42, (v_total & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x42, v_active & 0xFF);
+		serdes_reg_write(serdes, 0x42, (v_active & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x42, v_back_porch & 0xFF);
+		serdes_reg_write(serdes, 0x42, (v_back_porch & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x42, v_sync_len & 0xFF);
+		serdes_reg_write(serdes, 0x42, (v_sync_len & 0xFF00) >> 8);
+		serdes_reg_write(serdes, 0x42, v_front_porch & 0xFF);
+		serdes_reg_write(serdes, 0x42, (v_front_porch & 0xFF00) >> 8);
+        
+        SERDES_DBG_CHIP("%s: clock=%d hdisplay=%d vdisplay=%d\n", __func__,
+                        mode->clock, mode->hdisplay, mode->vdisplay);
+    }
 }
 
 static struct serdes_chip_bridge_ops ds90uh981_bridge_ops = {
