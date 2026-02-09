@@ -11,40 +11,54 @@
 
 static struct serdes *g_serdes_ser_split[MAX_NUM_SERDES_SPLIT];
 
-int serdes_i2c_set_sequence(struct serdes *serdes)
+int serdes_write_init_seq(struct serdes *serdes, struct serdes_init_seq *seq)
 {
     struct device *dev = serdes->dev;
-    int i, ret;
+    int i, ret = 0;
     unsigned int def;
 
-    for(i = 0; i < serdes->serdes_init_seq->reg_seq_cnt; i++) {
-        if(serdes->serdes_init_seq->reg_sequence[i].reg == 0xffff) {
-            udelay(serdes->serdes_init_seq->reg_sequence[i].def);
+    if (!seq)
+        return 0;
+
+    for(i = 0; i < seq->reg_seq_cnt; i++) {
+        if(seq->reg_sequence[i].reg == 0xffff) {
+            udelay(seq->reg_sequence[i].def);
             continue;
         }
 
         ret = serdes_reg_write(serdes,
-                        serdes->serdes_init_seq->reg_sequence[i].reg,
-                        serdes->serdes_init_seq->reg_sequence[i].def);
+                        seq->reg_sequence[i].reg,
+                        seq->reg_sequence[i].def);
         if(ret < 0) {
             dev_warn(dev, "%s failed to write reg %04x, ret %d, again now\n",
                      dev_name(serdes->dev),
-                     serdes->serdes_init_seq->reg_sequence[i].reg, ret);
+                     seq->reg_sequence[i].reg, ret);
             ret = serdes_reg_write(serdes,
-                            serdes->serdes_init_seq->reg_sequence[i].reg,
-                            serdes->serdes_init_seq->reg_sequence[i].def);
+                            seq->reg_sequence[i].reg,
+                            seq->reg_sequence[i].def);
         }
-        serdes_reg_read(serdes, serdes->serdes_init_seq->reg_sequence[i].reg, &def);
-        if((def !=  serdes->serdes_init_seq->reg_sequence[i].def) || (ret < 0)) {
+        serdes_reg_read(serdes, seq->reg_sequence[i].reg, &def);
+        if((def !=  seq->reg_sequence[i].def) || (ret < 0)) {
             /* if read value != write value then write again */
             dev_err(dev, "read %04x %04x != %04x\n",
-                    serdes->serdes_init_seq->reg_sequence[i].reg,
-                    def, serdes->serdes_init_seq->reg_sequence[i].def);
+                    seq->reg_sequence[i].reg,
+                    def, seq->reg_sequence[i].def);
             ret = serdes_reg_write(serdes,
-                            serdes->serdes_init_seq->reg_sequence[i].reg,
-                            serdes->serdes_init_seq->reg_sequence[i].def);
+                            seq->reg_sequence[i].reg,
+                            seq->reg_sequence[i].def);
         }
     }
+
+    return ret;
+}
+EXPORT_SYMBOL_GPL(serdes_write_init_seq);
+
+int serdes_i2c_set_sequence(struct serdes *serdes)
+{
+    struct device *dev = serdes->dev;
+    int ret;
+
+    ret = serdes_write_init_seq(serdes, serdes->serdes_init_seq);
 
     dev_info(dev, "serdes %s sequence_init\n", serdes->chip_data->name);
 
@@ -132,39 +146,11 @@ static int serdes_i2c_resume(struct device *dev)
 static int serdes_i2c_set_sequence_backup(struct serdes *serdes)
 {
     struct device *dev = serdes->dev;
-    int i, ret;
-    unsigned int def;
+    int ret;
 
-    for(i = 0; i < serdes->serdes_backup_seq->reg_seq_cnt; i++) {
-        if(serdes->serdes_backup_seq->reg_sequence[i].reg == 0xffff) {
-            udelay(serdes->serdes_backup_seq->reg_sequence[i].def);
-            continue;
-        }
+    ret = serdes_write_init_seq(serdes, serdes->serdes_backup_seq);
 
-        ret = serdes_reg_write(serdes,
-                        serdes->serdes_backup_seq->reg_sequence[i].reg,
-                        serdes->serdes_backup_seq->reg_sequence[i].def);
-        if(ret < 0) {
-            dev_warn(dev, "%s failed to write reg %04x, ret %d, again now\n",
-                     dev_name(serdes->dev),
-                     serdes->serdes_backup_seq->reg_sequence[i].reg, ret);
-            ret = serdes_reg_write(serdes,
-                            serdes->serdes_backup_seq->reg_sequence[i].reg,
-                            serdes->serdes_backup_seq->reg_sequence[i].def);
-        }
-        serdes_reg_read(serdes, serdes->serdes_backup_seq->reg_sequence[i].reg, &def);
-        if((def !=  serdes->serdes_backup_seq->reg_sequence[i].def) || (ret < 0)) {
-            /* if read value != write value then write again */
-            dev_err(dev, "read %04x %04x != %04x\n",
-                    serdes->serdes_backup_seq->reg_sequence[i].reg,
-                    def, serdes->serdes_backup_seq->reg_sequence[i].def);
-            ret = serdes_reg_write(serdes,
-                            serdes->serdes_backup_seq->reg_sequence[i].reg,
-                            serdes->serdes_backup_seq->reg_sequence[i].def);
-        }
-    }
-
-    dev_info(dev, "serdes %s sequence_init\n", serdes->chip_data->name);
+    dev_info(dev, "serdes %s sequence_backup\n", serdes->chip_data->name);
 
     return ret;
 }
@@ -301,22 +287,28 @@ static const unsigned int serdes_cable[] = {
     EXTCON_NONE,
 };
 
-static int serdes_parse_init_seq(struct device *dev, const u16 *data,
-                    int length, struct serdes_init_seq *seq)
+int serdes_of_parse_init_seq(struct device *dev, const struct device_node *np,
+                             const char *propname, struct serdes_init_seq *seq)
 {
     struct reg_sequence *reg_sequence;
     u16 *buf, *d;
     unsigned int i, cnt;
+    const void *data;
+    int len;
 
     if(!seq)
         return -EINVAL;
 
-    buf = devm_kmemdup(dev, data, length, GFP_KERNEL);
+    data = of_get_property(np, propname, &len);
+    if(!data)
+        return -EINVAL;
+
+    buf = devm_kmemdup(dev, data, len, GFP_KERNEL);
     if(!buf)
         return -ENOMEM;
 
     d = buf;
-    cnt = length / 4;
+    cnt = len / 4;
     seq->reg_seq_cnt = cnt;
 
     seq->reg_sequence = devm_kcalloc(dev, cnt, sizeof(struct reg_sequence), GFP_KERNEL);
@@ -332,26 +324,20 @@ static int serdes_parse_init_seq(struct device *dev, const u16 *data,
 
     return 0;
 }
+EXPORT_SYMBOL_GPL(serdes_of_parse_init_seq);
 
 static int serdes_get_init_seq(struct serdes *serdes)
 {
     struct device *dev = serdes->dev;
     struct device_node *np = dev->of_node;
-    const void *data;
-    int err, len, ret;
-
-    data = of_get_property(np, "serdes-init-sequence", &len);
-    if(!data) {
-        dev_err(dev, "Failed to get serdes-init-sequence\n");
-        return -EINVAL;
-    }
+    int err, ret = 0;
 
     serdes->serdes_init_seq = devm_kzalloc(dev, sizeof(*serdes->serdes_init_seq),
                                            GFP_KERNEL);
     if(!serdes->serdes_init_seq)
         return -ENOMEM;
 
-    err = serdes_parse_init_seq(dev, data, len, serdes->serdes_init_seq);
+    err = serdes_of_parse_init_seq(dev, np, "serdes-init-sequence", serdes->serdes_init_seq);
     if(err) {
         dev_err(dev, "Failed to parse serdes-init-sequence\n");
         return err;
@@ -362,7 +348,12 @@ static int serdes_get_init_seq(struct serdes *serdes)
     if(!serdes->serdes_backup_seq)
         return -ENOMEM;
 
-    err = serdes_parse_init_seq(dev, data, len, serdes->serdes_backup_seq);
+    /* Try to parse backup sequence, fallback to init sequence if not found (matching original behavior) */
+    err = serdes_of_parse_init_seq(dev, np, "serdes-init-sequence-backup", serdes->serdes_backup_seq);
+    if(err) {
+         err = serdes_of_parse_init_seq(dev, np, "serdes-init-sequence", serdes->serdes_backup_seq);
+    }
+    
     if(err) {
         dev_err(dev, "Failed to parse serdes-backup-seq\n");
         return err;
