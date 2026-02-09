@@ -587,8 +587,54 @@ static int calculate_pll(u64 target_pclk_hz, u64 ref_freq_hz,
 
 	return 0;
 }
+
 static int ds90ub981_bridge_init(struct serdes *serdes)
 {
+	int ret;
+	int fpd_mode, pclk_freq, select_port;	
+    u64 ref_freq = 27000000;
+    struct device *dev = serdes->dev;
+    struct pll_reg_config pll_cfg;
+
+    ret = of_property_read_u32(dev->of_node, "fpd-mode", &fpd_mode);
+    if(!ret)
+        fpd_mode = 0;
+
+    ret = of_property_read_u32(dev->of_node, "select-port", &select_port);
+    if(!ret)
+        fpd_mode = 0;
+
+    ret = of_property_read_u32(dev->of_node, "pclk-freq", &pclk_freq);
+    if(!ret) {
+        dev_err(dev, "Not set pclk frequence, please check device tree file!\n");
+        return -ENODEV;
+    }
+
+    ret = calculate_pll(pclk_freq, ref_freq, select_port, fpd_mode, &pll_cfg);
+    if(!ret) {
+        // N-divider config
+		serdes_reg_write(serdes, 0x40, 0x0a);
+		serdes_reg_write(serdes, 0x41, 0x05);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_ndiv[0]);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_ndiv[1]);
+        // Denominator config
+		serdes_reg_write(serdes, 0x40, 0x0a);
+		serdes_reg_write(serdes, 0x41, 0x18);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_den[0]);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_den[1]);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_den[2]);
+        // Numeraor config
+		serdes_reg_write(serdes, 0x40, 0x0a);
+		serdes_reg_write(serdes, 0x41, 0x1e);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_num[0]);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_num[1]);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_num[2]);
+        // Post-divider config
+		serdes_reg_write(serdes, 0x40, 0x08);
+		serdes_reg_write(serdes, 0x41, 0x13);
+		serdes_reg_write(serdes, 0x42, pll_cfg.ch0_pdiv);
+    }
+
     extcon_set_state(serdes->extcon, EXTCON_JACK_VIDEO_OUT, true);
 
     return 0;
