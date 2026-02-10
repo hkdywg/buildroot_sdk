@@ -1089,8 +1089,30 @@ static int ds90uh981_check_reg(struct serdes *serdes)
     return 0;
 }
 
+static int ds90uh981_identify(struct serdes *serdes)
+{
+    unsigned int val;
+    int ret;
+    struct i2c_client *client = to_i2c_client(serdes->dev);
+
+    ret = serdes_reg_read(serdes, DEVICE_ADDR_REG, &val);
+    if (ret)
+        return ret;
+
+    dev_info(serdes->dev, "I2C Addr: 0x%02x, Device ID read: 0x%02x\n", 
+             client->addr, val);
+
+    if (val != client->addr << 1) {
+        dev_err(serdes->dev, "Device ID mismatch: 0x%02x (expected 0x98)\n", val);
+        return -ENODEV;
+    }
+
+    return 0;
+}
+
 static struct serdes_check_reg_ops ds90uh981_check_reg_ops = {
     .check_reg = ds90uh981_check_reg,
+    .identify  = ds90uh981_identify,
 };
 
 static int  ds90uh981_pm_suspend(struct serdes *serdes)
@@ -1124,6 +1146,17 @@ static struct serdes_chip_irq_ops ds90uh981_irq_ops = {
 };
 
 
+static const struct mfd_cell serdes_ds90uh981_devs[] = {
+    {
+        .name = "serdes-pinctrl",
+        .of_compatible = "ti,ds90uh981-pinctrl",
+    },
+    {
+        .name = "serdes-bridge",
+        .of_compatible = "ti,ds90uh981-bridge",
+    },
+};
+
 struct serdes_chip_data serdes_ds90uh981_data  = {
     .name               = "ds90uh981",
     .serdes_type        = TYPE_SER,
@@ -1137,7 +1170,26 @@ struct serdes_chip_data serdes_ds90uh981_data  = {
     .check_ops          = &ds90uh981_check_reg_ops,
     .pm_ops             = &ds90uh981_pm_ops,
     .irq_ops            = &ds90uh981_irq_ops,
+    .mfd_cells          = serdes_ds90uh981_devs,
+    .num_cells          = ARRAY_SIZE(serdes_ds90uh981_devs),
 };
-EXPORT_SYMBOL_GPL(serdes_ds90uh981_data);
+
+static const struct of_device_id ds90uh981_of_match[] = {
+    { .compatible = "ti,ds90uh981", .data = &serdes_ds90uh981_data },
+    { }
+};
+MODULE_DEVICE_TABLE(of, ds90uh981_of_match);
+
+static struct i2c_driver ds90uh981_driver = {
+    .driver = {
+        .name = "ds90uh981",
+        .of_match_table = ds90uh981_of_match,
+        .pm = &serdes_pm_ops,
+    },
+    .probe = serdes_i2c_probe,
+    .remove = serdes_i2c_remove,
+    .shutdown = serdes_i2c_shutdown,
+};
+module_i2c_driver(ds90uh981_driver);
 
 MODULE_LICENSE("GPL");
