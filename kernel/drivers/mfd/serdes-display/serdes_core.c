@@ -196,51 +196,58 @@ int serdes_device_init(struct serdes *serdes)
 {
     struct serdes_chip_data *chip_data = serdes->chip_data;
     const struct mfd_cell *serdes_devs = NULL;
-    int ret, mfd_num;
+    int ret, mfd_num = 0;
 
-    switch(chip_data->serdes_id) {
-    case MAXIM_ID_MAX96781:
-        serdes_devs = serdes_max96781_devs;
-        mfd_num = ARRAY_SIZE(serdes_max96781_devs);
-        break;
-    case MAXIM_ID_MAX96752:
-        serdes_devs = serdes_max96752_devs;
-        mfd_num = ARRAY_SIZE(serdes_max96752_devs);
-        break;
-    case TI_ID_DS90UH981:
-        serdes_devs = serdes_ds90uh981_devs;
-        mfd_num = ARRAY_SIZE(serdes_ds90uh981_devs);
-        break;
-    case TI_ID_DS90UH983:
-        serdes_devs = serdes_ds90uh983_devs;
-        mfd_num = ARRAY_SIZE(serdes_ds90uh983_devs);
-        break;
-    case TI_ID_DS90UB928:
-        serdes_devs = serdes_ds90ub928_devs;
-        mfd_num = ARRAY_SIZE(serdes_ds90ub928_devs);
-        break;
-    case TI_ID_DS90UB968:
-        serdes_devs = serdes_ds90ub968_devs;
-        mfd_num = ARRAY_SIZE(serdes_ds90ub968_devs);
-        break;
-    case AIM_ID_AIM951X:
-        serdes_devs = serdes_aim951x_devs;
-        mfd_num = ARRAY_SIZE(serdes_aim951x_devs);
-        break;
-    case AIM_ID_AIM916:
-        serdes_devs = serdes_aim916_devs;
-        mfd_num = ARRAY_SIZE(serdes_aim916_devs);
-        break;
-    default:
-        dev_info(serdes->dev, "unknown device\n");
-        break;
+    if (chip_data->mfd_cells) {
+        serdes_devs = chip_data->mfd_cells;
+        mfd_num = chip_data->num_cells;
+    } else {
+        switch(chip_data->serdes_id) {
+        case MAXIM_ID_MAX96781:
+            serdes_devs = serdes_max96781_devs;
+            mfd_num = ARRAY_SIZE(serdes_max96781_devs);
+            break;
+        case MAXIM_ID_MAX96752:
+            serdes_devs = serdes_max96752_devs;
+            mfd_num = ARRAY_SIZE(serdes_max96752_devs);
+            break;
+        case TI_ID_DS90UH981:
+            serdes_devs = serdes_ds90uh981_devs;
+            mfd_num = ARRAY_SIZE(serdes_ds90uh981_devs);
+            break;
+        case TI_ID_DS90UH983:
+            serdes_devs = serdes_ds90uh983_devs;
+            mfd_num = ARRAY_SIZE(serdes_ds90uh983_devs);
+            break;
+        case TI_ID_DS90UB928:
+            serdes_devs = serdes_ds90ub928_devs;
+            mfd_num = ARRAY_SIZE(serdes_ds90ub928_devs);
+            break;
+        case TI_ID_DS90UB968:
+            serdes_devs = serdes_ds90ub968_devs;
+            mfd_num = ARRAY_SIZE(serdes_ds90ub968_devs);
+            break;
+        case AIM_ID_AIM951X:
+            serdes_devs = serdes_aim951x_devs;
+            mfd_num = ARRAY_SIZE(serdes_aim951x_devs);
+            break;
+        case AIM_ID_AIM916:
+            serdes_devs = serdes_aim916_devs;
+            mfd_num = ARRAY_SIZE(serdes_aim916_devs);
+            break;
+        default:
+            dev_info(serdes->dev, "unknown device\n");
+            break;
+        }
     }
 
-    ret = devm_mfd_add_devices(serdes->dev, PLATFORM_DEVID_AUTO, serdes_devs,
-                        mfd_num, NULL, 0, NULL);
-    if(ret != 0) {
-        dev_err(serdes->dev, "Failed to add serdes children\n");
-        return ret;
+    if (serdes_devs && mfd_num > 0) {
+        ret = devm_mfd_add_devices(serdes->dev, PLATFORM_DEVID_AUTO, serdes_devs,
+                            mfd_num, NULL, 0, NULL);
+        if(ret != 0) {
+            dev_err(serdes->dev, "Failed to add serdes children\n");
+            return ret;
+        }
     }
 
     return 0;

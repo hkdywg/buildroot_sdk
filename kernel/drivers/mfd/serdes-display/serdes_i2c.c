@@ -65,13 +65,14 @@ int serdes_i2c_set_sequence(struct serdes *serdes)
     return ret;
 }
 
-static void serdes_i2c_shutdown(struct i2c_client *client)
+void serdes_i2c_shutdown(struct i2c_client *client)
 {
     struct device *dev = &client->dev;
     struct serdes *serdes = dev_get_drvdata(dev);
 
     serdes_device_shutdown(serdes);
 }
+EXPORT_SYMBOL_GPL(serdes_i2c_shutdown);
 
 static void serdes_reg_check_work_free(struct serdes *serdes)
 {
@@ -79,7 +80,7 @@ static void serdes_reg_check_work_free(struct serdes *serdes)
     kthread_destroy_worker(serdes->kworker);
 }
 
-static void serdes_i2c_remove(struct i2c_client *client)
+int serdes_i2c_remove(struct i2c_client *client)
 {
     struct device *dev = &client->dev;
     struct serdes *serdes = dev_get_drvdata(dev);
@@ -91,7 +92,10 @@ static void serdes_i2c_remove(struct i2c_client *client)
         cancel_delayed_work_sync(&serdes->mfd_delay_work);
         destroy_workqueue(serdes->mfd_wq);
     }
+
+    return 0;
 }
+EXPORT_SYMBOL_GPL(serdes_i2c_remove);
 
 static int serdes_i2c_prepare(struct device *dev)
 {
@@ -359,16 +363,10 @@ static int serdes_get_init_seq(struct serdes *serdes)
         return err;
     }
 
-    if(serdes->chip_data->serdes_type == TYPE_SER) {
-        if(serdes->chip_data->chip_init)
-            serdes->chip_data->chip_init(serdes);
-        ret = serdes_i2c_set_sequence(serdes);
-    }
-
-    return ret;
+    return 0;
 }
 
-static int serdes_i2c_probe(struct i2c_client *client,
+int serdes_i2c_probe(struct i2c_client *client,
                     const struct i2c_device_id *id)
 {
     struct device *dev = &client->dev;
@@ -469,6 +467,25 @@ static int serdes_i2c_probe(struct i2c_client *client,
         }
     }
 
+    if (serdes->chip_data->check_ops && serdes->chip_data->check_ops->identify) {
+        ret = serdes->chip_data->check_ops->identify(serdes);
+        if (ret)
+            return dev_err_probe(dev, ret, "Failed to identify device\n");
+    } else {
+        unsigned int val;
+        ret = serdes_reg_read(serdes, 0x00, &val);
+        if (ret)
+            return dev_err_probe(dev, ret, "Device not present (read reg 0 failed)\n");
+    }
+
+    if(serdes->chip_data->serdes_type == TYPE_SER) {
+        if(serdes->chip_data->chip_init)
+            serdes->chip_data->chip_init(serdes);
+        ret = serdes_i2c_set_sequence(serdes);
+        if (ret)
+             return dev_err_probe(dev, ret, "Failed to set sequence\n");
+    }
+
     serdes->use_delay_work = of_property_read_bool(dev->of_node, "user-delay-work");
     if(serdes->use_delay_work) {
         serdes->mfd_wq = alloc_ordered_workqueue("%s",
@@ -491,53 +508,16 @@ static int serdes_i2c_probe(struct i2c_client *client,
 
     return 0;
 }
+EXPORT_SYMBOL_GPL(serdes_i2c_probe);
 
-extern struct serdes_chip_data serdes_max96781_data;
-extern struct serdes_chip_data serdes_max96752_data;
-extern struct serdes_chip_data serdes_ds90uh981_data;
-
-static const struct of_device_id serdes_of_match[] = {
-    { .compatible = "maxim,max96781",   .data = &serdes_max96781_data   },
-    { .compatible = "maxim,max96752",   .data = &serdes_max96752_data   },
-    { .compatible = "ti,ds90uh981",     .data = &serdes_ds90uh981_data  },
-#if 0
-    { .compatible = "ti,ds90uh983",     .data = &serdes_ds90uh983_data  },
-    { .compatible = "aim,aim951X",      .data = &serdes_aim951x_data    },
-#endif
-    {  }
-};
-
-static const struct dev_pm_ops serdes_pm_ops = {
+const struct dev_pm_ops serdes_pm_ops = {
     .prepare = serdes_i2c_prepare,
     .complete = serdes_i2c_complete,
     .suspend = serdes_i2c_suspend,
     .resume = serdes_i2c_resume,
     .poweroff = serdes_i2c_poweroff,
 };
-
-static struct i2c_driver serdes_i2c_driver = {
-    .driver = {
-        .name = "serdes",
-        .pm = &serdes_pm_ops,
-        .of_match_table = of_match_ptr(serdes_of_match),
-    },
-    .probe = serdes_i2c_probe,
-    .shutdown = serdes_i2c_shutdown,
-    .remove = (void *)serdes_i2c_remove,
-};
-
-static int __init serdes_i2c_init(void)
-{
-    int ret;
-
-    ret = i2c_add_driver(&serdes_i2c_driver);
-    if(ret != 0)
-        pr_err("Failed to register serdes I2C driver: %d\n", ret);
-
-    return ret;
-}
-
-subsys_initcall(serdes_i2c_init);
+EXPORT_SYMBOL_GPL(serdes_pm_ops);
 
 MODULE_AUTHOR("weigenyin");
 MODULE_DESCRIPTION("The AIM951X Serializer driver");

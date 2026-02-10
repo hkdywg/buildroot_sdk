@@ -212,6 +212,7 @@ struct serdes_chip_split_ops {
 
 struct serdes_check_reg_ops {
     int (*check_reg)(struct serdes *serdes);
+    int (*identify)(struct serdes *serdes);
 };
 
 struct serdes_chip_pm_ops {
@@ -252,6 +253,8 @@ struct serdes_chip_data {
     struct serdes_check_reg_ops *check_ops;
     struct serdes_chip_pm_ops *pm_ops;
     struct serdes_chip_irq_ops *irq_ops;
+    const struct mfd_cell *mfd_cells;
+    int num_cells;
 };
 
 struct serdes_init_seq {
@@ -463,5 +466,13 @@ int serdes_irq_init(struct serdes *serdes);
 void serdes_irq_exit(struct serdes *serdes);
 void serdes_auxadc_init(struct serdes *serdes);
 
-#endif
+int serdes_of_parse_init_seq(struct device *dev, const struct device_node *np,
+                               const char *propname, struct serdes_init_seq *seq);
+
+int serdes_i2c_probe(struct i2c_client *client, const struct i2c_device_id *id);
+int serdes_i2c_remove(struct i2c_client *client);
+void serdes_i2c_shutdown(struct i2c_client *client);
+extern const struct dev_pm_ops serdes_pm_ops;
+
+#endif /* _DISPLAY_SERDES_CORE_H_ */
 

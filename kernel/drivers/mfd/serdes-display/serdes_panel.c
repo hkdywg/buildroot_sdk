@@ -221,6 +221,57 @@ static void serdes_panel_timing_info(struct device *dev, struct display_timing *
 
 }
 
+static struct serdes_init_seq *serdes_of_get_init_seq(struct device *dev)
+{
+    struct device_node *np = dev->of_node;
+    struct serdes_init_seq *seq;
+    struct reg_sequence *reg_seq;
+    int len, count, i;
+    u32 *val;
+    int ret;
+
+    if (!of_find_property(np, "panel-init-sequence", &len))
+        return NULL;
+
+    count = len / sizeof(u32);
+    if (count % 2 != 0) {
+        dev_err(dev, "Invalid panel-init-sequence length\n");
+        return NULL;
+    }
+    count /= 2;
+
+    seq = devm_kzalloc(dev, sizeof(*seq), GFP_KERNEL);
+    if (!seq)
+        return NULL;
+
+    reg_seq = devm_kcalloc(dev, count, sizeof(*reg_seq), GFP_KERNEL);
+    if (!reg_seq)
+        return NULL;
+
+    val = kcalloc(count * 2, sizeof(u32), GFP_KERNEL);
+    if (!val)
+        return NULL;
+
+    ret = of_property_read_u32_array(np, "panel-init-sequence", val, count * 2);
+    if (ret) {
+        kfree(val);
+        return NULL;
+    }
+
+    for (i = 0; i < count; i++) {
+        reg_seq[i].reg = val[i * 2];
+        reg_seq[i].def = val[i * 2 + 1];
+        reg_seq[i].delay_us = 0;
+    }
+
+    kfree(val);
+
+    seq->reg_sequence = reg_seq;
+    seq->reg_seq_cnt = count;
+
+    return seq;
+}
+
 static int serdes_panel_parse_dt(struct serdes_panel *serdes_panel)
 {
     struct device *dev = serdes_panel->dev;
@@ -229,6 +280,11 @@ static int serdes_panel_parse_dt(struct serdes_panel *serdes_panel)
     int ret, len;
     const char *mapping;
     unsigned int panel_size[2] = {320, 180};
+
+    serdes_panel->serdes_init_seq = serdes_of_get_init_seq(dev);
+    if (serdes_panel->serdes_init_seq)
+        dev_info(dev, "Found panel-init-sequence with %d items\n", 
+                 serdes_panel->serdes_init_seq->reg_seq_cnt);
 
     serdes_panel->width_mm = panel_size[0];
     serdes_panel->height_mm = panel_size[1];
