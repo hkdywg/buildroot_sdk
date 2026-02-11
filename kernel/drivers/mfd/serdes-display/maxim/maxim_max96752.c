@@ -666,6 +666,17 @@ static struct serdes_chip_irq_ops max96752_irq_ops = {
 	.err_handle = max96752_irq_err_handle,
 };
 
+static const struct mfd_cell serdes_max96752_devs[] = {
+    {
+        .name = "serdes-pinctrl",
+        .of_compatible = "maxim,max96752-pinctrl",
+    },
+    {
+        .name = "serdes-panel",
+        .of_compatible = "maxim,max96752-panel",
+    },
+};
+
 struct serdes_chip_data serdes_max96752_data = {
 	.name		= "max96752",
 	.serdes_type	= TYPE_DES,
@@ -681,7 +692,26 @@ struct serdes_chip_data serdes_max96752_data = {
 	.gpio_ops	= &max96752_gpio_ops,
 	.pm_ops		= &max96752_pm_ops,
 	.irq_ops	= &max96752_irq_ops,
+    .mfd_cells  = serdes_max96752_devs,
+    .num_cells  = ARRAY_SIZE(serdes_max96752_devs),
 };
-EXPORT_SYMBOL_GPL(serdes_max96752_data);
+
+static const struct of_device_id max96752_of_match[] = {
+    { .compatible = "maxim,max96752", .data = &serdes_max96752_data },
+    { }
+};
+MODULE_DEVICE_TABLE(of, max96752_of_match);
+
+static struct i2c_driver max96752_driver = {
+    .driver = {
+        .name = "max96752",
+        .of_match_table = max96752_of_match,
+        .pm = &serdes_pm_ops,
+    },
+    .probe = serdes_i2c_probe,
+    .remove = serdes_i2c_remove,
+    .shutdown = serdes_i2c_shutdown,
+};
+module_i2c_driver(max96752_driver);
 
 MODULE_LICENSE("GPL");
