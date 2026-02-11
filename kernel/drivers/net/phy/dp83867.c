@@ -56,6 +56,11 @@
 #define DP83867_SW_RESET	BIT(15)
 #define DP83867_SW_RESTART	BIT(14)
 
+#define DP83867_BASE_REG_0  0x00
+#define DP83867_LEDCR1      0x18
+#define DP83867_LED1_SEL_MASK       (BIT(4) | BIT(5) | BIT(6) | BIT(7))
+#define DP83867_LED1_BLINK_EN		(BIT(4) | BIT(5) | BIT(7))
+
 /* MICR Interrupt bits */
 #define MII_DP83867_MICR_AN_ERR_INT_EN		BIT(15)
 #define MII_DP83867_MICR_SPEED_CHNG_INT_EN	BIT(14)
@@ -527,25 +532,39 @@ static int dp83867_of_init(struct phy_device *phydev)
 	dp83867->sgmii_ref_clk_en = of_property_read_bool(of_node,
 							  "ti,sgmii-ref-clock-output-enable");
 
-	dp83867->rx_id_delay = DP83867_RGMII_RX_CLK_DELAY_INV;
-	ret = of_property_read_u32(of_node, "ti,rx-internal-delay",
-				   &dp83867->rx_id_delay);
-	if (!ret && dp83867->rx_id_delay > DP83867_RGMII_RX_CLK_DELAY_MAX) {
-		phydev_err(phydev,
-			   "ti,rx-internal-delay value of %u out of range\n",
-			   dp83867->rx_id_delay);
-		return -EINVAL;
-	}
+    /* RX delay *must* be specified if internal delay of RX is used. */
+    if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
+        phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID) {
+        ret = of_property_read_u32(of_node, "ti,rx-internal-delay",
+                       &dp83867->rx_id_delay);         
+        if (ret) {         
+            phydev_err(phydev, "ti,rx-internal-delay must be specified\n");
+            return ret;    
+        }
+        if (dp83867->rx_id_delay > DP83867_RGMII_RX_CLK_DELAY_MAX) {
+            phydev_err(phydev,
+                   "ti,rx-internal-delay value of %u out of range\n",
+                   dp83867->rx_id_delay);
+            return -EINVAL;
+        }
+    }
 
-	dp83867->tx_id_delay = DP83867_RGMII_TX_CLK_DELAY_INV;
-	ret = of_property_read_u32(of_node, "ti,tx-internal-delay",
-				   &dp83867->tx_id_delay);
-	if (!ret && dp83867->tx_id_delay > DP83867_RGMII_TX_CLK_DELAY_MAX) {
-		phydev_err(phydev,
-			   "ti,tx-internal-delay value of %u out of range\n",
-			   dp83867->tx_id_delay);
-		return -EINVAL;
-	}
+    /* TX delay *must* be specified if internal delay of RX is used. */
+    if (phydev->interface == PHY_INTERFACE_MODE_RGMII_ID ||
+        phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID) {
+        ret = of_property_read_u32(of_node, "ti,tx-internal-delay",
+                       &dp83867->tx_id_delay);
+        if (ret) {
+            phydev_err(phydev, "ti,tx-internal-delay must be specified\n");
+            return ret;
+        }
+        if (dp83867->tx_id_delay > DP83867_RGMII_TX_CLK_DELAY_MAX) {
+            phydev_err(phydev,
+                   "ti,tx-internal-delay value of %u out of range\n",
+                   dp83867->tx_id_delay);
+            return -EINVAL;
+        }
+    }
 
 	if (of_property_read_bool(of_node, "enet-phy-lane-swap"))
 		dp83867->port_mirroring = DP83867_PORT_MIRROING_EN;
@@ -609,6 +628,28 @@ static int dp83867_config_init(struct phy_device *phydev)
 	int ret, val, bs;
 	u16 delay;
 
+    /* Configure output internal clocks through the CLK_OUT pin, by default the output 
+     * clock is sysnchronous to the XI oscilator */
+	phy_write_mmd(phydev, DP83867_DEVADDR, DP83867_IO_MUX_CFG, 0x080c);
+
+    /* Force dp83867 work in full-100M */
+	phy_write(phydev, DP83867_BASE_REG_0, 0x3100);
+
+	val = phy_read(phydev, DP83867_CFG3);
+	/* Enable Interrupt output INT_OE in CFG3 register */
+	if (phy_interrupt_is_valid(phydev))
+		val |= DP83867_CFG3_INT_OE;
+
+	val |= DP83867_CFG3_ROBUST_AUTO_MDIX;
+	phy_write(phydev, DP83867_CFG3, val);
+
+    /* Change LED_1 working state frome "1000BT link established" to  
+       "Link eatablished, blink for transmit or receive activity" */
+	val = phy_read(phydev, DP83867_LEDCR1);
+	val &= ~ DP83867_LED1_SEL_MASK;
+    val |= DP83867_LED1_BLINK_EN;
+	phy_write(phydev, DP83867_LEDCR1, val);
+
 	/* Force speed optimization for the PHY even if it strapped */
 	ret = phy_modify(phydev, DP83867_CFG2, DP83867_DOWNSHIFT_EN,
 			 DP83867_DOWNSHIFT_EN);
@@ -637,7 +678,6 @@ static int dp83867_config_init(struct phy_device *phydev)
 		if (ret)
 			return ret;
 	}
-
 	if (phy_interface_is_rgmii(phydev) ||
 	    phydev->interface == PHY_INTERFACE_MODE_SGMII) {
 		val = phy_read(phydev, MII_DP83867_PHYCTRL);
@@ -658,7 +698,6 @@ static int dp83867_config_init(struct phy_device *phydev)
 		if (ret)
 			return ret;
 	}
-
 	if (phy_interface_is_rgmii(phydev)) {
 		val = phy_read(phydev, MII_DP83867_PHYCTRL);
 		if (val < 0)
@@ -701,17 +740,22 @@ static int dp83867_config_init(struct phy_device *phydev)
 		if (phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID)
 			val |= DP83867_RGMII_RX_CLK_DELAY_EN;
 
-		phy_write_mmd(phydev, DP83867_DEVADDR, DP83867_RGMIICTL, val);
 
-		delay = 0;
-		if (dp83867->rx_id_delay != DP83867_RGMII_RX_CLK_DELAY_INV)
-			delay |= dp83867->rx_id_delay;
-		if (dp83867->tx_id_delay != DP83867_RGMII_TX_CLK_DELAY_INV)
-			delay |= dp83867->tx_id_delay <<
-				 DP83867_RGMII_TX_CLK_DELAY_SHIFT;
+		if ((phydev->interface == PHY_INTERFACE_MODE_RGMII_ID) || \
+		    (phydev->interface == PHY_INTERFACE_MODE_RGMII_TXID) || \
+            (phydev->interface == PHY_INTERFACE_MODE_RGMII_RXID)){
 
-		phy_write_mmd(phydev, DP83867_DEVADDR, DP83867_RGMIIDCTL,
-			      delay);
+            phy_write_mmd(phydev, DP83867_DEVADDR, DP83867_RGMIICTL, val);
+            delay = 0;
+            if (dp83867->rx_id_delay != DP83867_RGMII_RX_CLK_DELAY_INV)
+                delay |= dp83867->rx_id_delay;
+            if (dp83867->tx_id_delay != DP83867_RGMII_TX_CLK_DELAY_INV)
+                delay |= dp83867->tx_id_delay <<
+                     DP83867_RGMII_TX_CLK_DELAY_SHIFT;
+
+            phy_write_mmd(phydev, DP83867_DEVADDR, DP83867_RGMIIDCTL,
+                      delay);
+        }
 	}
 
 	/* If specified, set io impedance */
