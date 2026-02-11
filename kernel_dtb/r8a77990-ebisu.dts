@@ -177,28 +177,6 @@
 	};
 };
 
-&avb {
-	pinctrl-0 = <&avb_pins>;
-	pinctrl-names = "default";
-	phy-handle = <&phy0>;
-	//phy-mode = "rgmii-txid";
-	phy-mode = "rgmii"; /*rgmii tx-id not support hardware*/
-	status = "okay";
-
-	reset-gpios = <&gpio5 12 GPIO_ACTIVE_LOW>;
-    reset-delay-us = <20>;
-    reset_post_delay_us = <300>;
-
-	phy0: ethernet-phy@0 {
-		reg = <0>;
-		interrupt-parent = <&gpio2>;
-		interrupts = <21 IRQ_TYPE_LEVEL_LOW>;
-		reset-gpios = <&gpio5 19 GPIO_ACTIVE_LOW>;
-		//wake-gpios = <&gpio5 18 GPIO_ACTIVE_HIGH>;
-		//enable-gpios = <&gpio5 17 GPIO_ACTIVE_HIGH>;
-
-	};
-};
 
 
 &du {
