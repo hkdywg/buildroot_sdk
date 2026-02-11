@@ -62,4 +62,9 @@ Which would you select:
 
 ```
 ./build.sh rcar_e3_control_box
+./build.sh rcar_e3_control_box kernel
 ```
+
+<div style="border-left: 4px solid #4CAF50; padding-left: 10px; background-color: #f0f8f0;">
+<strong>Note:</strong> 编译脚本支持TAB键补全功能，需要source ./build.sh-completion.bash
+</div>
