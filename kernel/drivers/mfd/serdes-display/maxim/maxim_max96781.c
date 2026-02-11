@@ -802,8 +802,31 @@ static int max96781_check_reg(struct serdes *serdes)
     return 0;
 }
 
+static int max96781_identify(struct serdes *serdes)
+{
+    unsigned int val;
+    int ret;
+
+    struct i2c_client *client = to_i2c_client(serdes->dev);
+
+    ret = serdes_reg_read(serdes, DEVICE_ADDR_REG, &val);
+    if (ret)
+        return ret;
+
+    dev_info(serdes->dev, "I2C Addr: 0x%02x, Device ID read: 0x%02x\n", 
+             client->addr, val);
+
+    if (val != client->addr << 1) {
+        dev_err(serdes->dev, "Device ID mismatch: 0x%02x (expected 0x98)\n", val);
+        return -ENODEV;
+    }
+
+    return 0;
+}
+
 static struct serdes_check_reg_ops max96781_check_reg_ops = {
     .check_reg = max96781_check_reg,
+    .identify  = max96781_identify,
 };
 
 static int  max96781_pm_suspend(struct serdes *serdes)
@@ -836,6 +859,16 @@ static struct serdes_chip_irq_ops max96781_irq_ops = {
     .err_handle  = max96781_irq_err_handle,
 };
 
+static const struct mfd_cell serdes_max96781_devs[] = {
+    {
+        .name = "serdes-pinctrl",
+        .of_compatible = "ti,max96781-pinctrl",
+    },
+    {
+        .name = "serdes-bridge",
+        .of_compatible = "maxim,max96781-bridge",
+    },
+};
 
 struct serdes_chip_data serdes_max96781_data = {
     .name               = "max96781",
@@ -850,7 +883,26 @@ struct serdes_chip_data serdes_max96781_data = {
     .check_ops          = &max96781_check_reg_ops,
     .pm_ops             = &max96781_pm_ops,
     .irq_ops            = &max96781_irq_ops,
+    .mfd_cells          = serdes_max96781_devs,
+    .num_cells          = ARRAY_SIZE(serdes_max96781_devs),
 };
-EXPORT_SYMBOL_GPL(serdes_max96781_data);
+
+static const struct of_device_id max96781_of_match[] = {
+    { .compatible = "maxim,max96781", .data = &serdes_max96781_data },
+    { }
+};
+MODULE_DEVICE_TABLE(of, max96781_of_match);
+
+static struct i2c_driver max96781_driver = {
+    .driver = {
+        .name = "max96781",
+        .of_match_table = max96781_of_match,
+        .pm = &serdes_pm_ops,
+    },
+    .probe = serdes_i2c_probe,
+    .remove = serdes_i2c_remove,
+    .shutdown = serdes_i2c_shutdown,
+};
+module_i2c_driver(max96781_driver);
 
 MODULE_LICENSE("GPL");

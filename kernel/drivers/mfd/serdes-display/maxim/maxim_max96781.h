@@ -22,6 +22,7 @@
 #define GPIO_G_REG(gpio)    (0x0206 + ((gpio) * 8))
 
 /* 000h */
+#define DEVICE_ADDR_REG     0x00
 #define DEV_ADDR            GENMASK(7, 1)
 #define CFG_BLOCK           BIT(0)
 
