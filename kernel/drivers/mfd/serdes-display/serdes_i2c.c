@@ -432,7 +432,6 @@ int serdes_i2c_probe(struct i2c_client *client,
     dev_set_drvdata(serdes->dev, serdes);
     ret = serdes_irq_init(serdes);
     if(ret != 0) {
-        serdes_irq_exit(serdes);
         return ret;
     }
 
@@ -471,11 +470,6 @@ int serdes_i2c_probe(struct i2c_client *client,
         ret = serdes->chip_data->check_ops->identify(serdes);
         if (ret)
             return dev_err_probe(dev, ret, "Failed to identify device\n");
-    } else {
-        unsigned int val;
-        ret = serdes_reg_read(serdes, 0x00, &val);
-        if (ret)
-            return dev_err_probe(dev, ret, "Device not present (read reg 0 failed)\n");
     }
 
     if(serdes->chip_data->serdes_type == TYPE_SER) {
