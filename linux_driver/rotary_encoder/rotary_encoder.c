@@ -26,7 +26,7 @@
 
 #define ENCODER_BUF_SIZE    3
 #define ENCODER_FIFO_DEPTH  16
-#define DEBOUNCE_MS         20
+#define DEBOUNCE_MS         10
 
 struct rotary_encoder_drvdata;
 
@@ -69,13 +69,15 @@ static void encoder_timer_callback(struct timer_list *t)
 	if (next_head == drvdata->tail) {
 		/* FIFO full, drop the oldest event to make room for new one */
 		drvdata->tail = (drvdata->tail + 1) % ENCODER_FIFO_DEPTH;
-		dev_warn(drvdata->dev, "Encoder FIFO full, dropping oldest event\n");
+		dev_dbg(drvdata->dev, "Encoder FIFO full, dropping oldest event\n");
 	}
 
 	/* Store event in FIFO: IRQ number helps identify which knob moved */
 	drvdata->fifo[drvdata->head][0] = ch->irq;
 	drvdata->fifo[drvdata->head][1] = gpio_get_value(ch->phase_a_gpio);
 	drvdata->fifo[drvdata->head][2] = gpio_get_value(ch->phase_b_gpio);
+dev_info(drvdata->dev, "data = %d, %d, %d\n", drvdata->fifo[drvdata->head][0],
+         drvdata->fifo[drvdata->head][1], drvdata->fifo[drvdata->head][2]);
 	
 	drvdata->head = next_head;
 
@@ -246,6 +248,7 @@ static int rotary_encoder_probe(struct platform_device *pdev)
 		timer_setup(&ch->timer, encoder_timer_callback, 0);
 
 		ch->irq = gpio_to_irq(phase_a_gpio);
+        dev_info(dev, "gpio num %d to irq %d\n", phase_a_gpio, ch->irq);
 		if (ch->irq < 0) {
 			dev_err(dev, "Unable to map GPIO A %d to IRQ\n", phase_a_gpio);
 			return ch->irq;
