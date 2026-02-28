@@ -8,11 +8,15 @@
 *
 */
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/platform_device.h>
 #include <linux/file.h>
 #include <linux/fs.h>
+#include <linux/errno.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
+#include <linux/uaccess.h>
+#include <drm/drm_print.h>
 #include <drm/drm_atomic_uapi.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_file.h>
@@ -24,6 +28,10 @@
 #include <drm/drm_fourcc.h>
 
 #define DUMP_BUF_PATH           "/home/root"
+
+static char *card_name = "card0";
+module_param(card_name, charp, 0644);
+MODULE_PARM_DESC(card_name, "DRM card node name, e.g. card0");
 
 struct drm_dump_info {
     const char *plane_name;
@@ -40,6 +48,7 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
     char format_name[5];
     struct file *file;
     size_t size;
+    loff_t pos = 0;
 
     snprintf(file_name, sizeof(file_name), "%p4cc", &dump_info->fb->format->format);
     strscpy(format_name, file_name, 5);
@@ -48,9 +57,12 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
         DUMP_BUF_PATH, dump_info->plane_name, dump_info->fb->width, dump_info->fb->height,
         dump_info->fb->pitches[0], format_name, frame_count);
 
+    if (!obj)
+        return -ENOENT;
+
     /* Use GEM object's vmap callback (exported API), not internal drm_gem_vmap */
     if (!obj->funcs || !obj->funcs->vmap) {
-        printk("GEM object has no vmap callback\n");
+        DRM_ERROR("GEM object has no vmap callback\n");
         return -EOPNOTSUPP;
     }
     vaddr = obj->funcs->vmap(obj);
@@ -61,9 +73,9 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
 
     file = filp_open(file_name, O_RDWR | O_CREAT, 0644);
     if(!IS_ERR(file)) {
-        kernel_write(file, vaddr, size, 0);
+        kernel_write(file, vaddr, size, &pos);
         DRM_INFO("dump file name is:%s\n", file_name);
-        fput(file);
+        filp_close(file, NULL);
     } else {
         DRM_INFO("open %s failed\n", file_name);
     }
@@ -163,9 +175,12 @@ static int drm_add_dump_buffer(struct drm_crtc *crtc, struct dentry *root)
     struct dentry *ent;
 
     dump_root = debugfs_create_dir("drm_dump", root);
+    if(!dump_root) {
+        DRM_ERROR("create drm_dump err\n");
+    }
     ent = debugfs_create_file("dump", 0644, dump_root, crtc, &drm_dump_buffer_fops);
     if(!ent) {
-        printk("create drm_dump err\n");
+        DRM_ERROR("create drm_dump/dump err\n");
         debugfs_remove_recursive(dump_root);
     }
 
@@ -181,19 +196,28 @@ static struct drm_device *find_exist_drm_device(const char *card_name)
     struct drm_file *file_priv;
     struct drm_device *drm = NULL;
     char path[32];
+    int err;
 
     if (!card_name || !*card_name)
-        return NULL;
+        return ERR_PTR(-EINVAL);
 
     snprintf(path, sizeof(path), "/dev/dri/%s", card_name);
     filp = filp_open(path, O_RDONLY, 0);
-    if (IS_ERR(filp))
-        return NULL;
+    if (IS_ERR(filp)) {
+        err = PTR_ERR(filp);
+        /*
+         * card node might not be ready when this module loads (load ordering).
+         * Defer probing so the core can retry later.
+         */
+        if (err == -ENOENT || err == -ENODEV)
+            return ERR_PTR(-EPROBE_DEFER);
+        return ERR_PTR(err);
+    }
 
     file_priv = filp->private_data;
     if (!file_priv || !file_priv->minor || !file_priv->minor->dev) {
         fput(filp);
-        return NULL;
+        return ERR_PTR(-ENODEV);
     }
 
     drm = file_priv->minor->dev;
@@ -207,40 +231,33 @@ static int drm_debug_dump_probe(struct platform_device *pdev)
 {
     struct drm_device *drm;
     struct drm_crtc *crtc;
-    const char *card_name = "card0";
     int ret;
 
-printk("run line func: %s, line %d\n", __func__, __LINE__);
     drm = find_exist_drm_device(card_name);
-    if(!drm) {
-        printk("Cannot find drm device %s\n",  card_name);
-        return -ENODEV;
-    }
+    if (IS_ERR(drm))
+        return PTR_ERR(drm);
 
-printk("run line func: %s, line %d\n", __func__, __LINE__);
     crtc = drm_crtc_from_index(drm, 0);
     if (!crtc) {
-        printk("No enabled CRTC found on %s\n", card_name);
+        DRM_ERROR("No enabled CRTC found on %s\n", card_name);
         drm_dev_put(drm);
         return -ENODEV;
     }
 
-printk("run line func: %s, line %d\n", __func__, __LINE__);
     /* check debugfs is usable */
     if(!drm->primary || !drm->primary->debugfs_root) {
-        printk("Debugfs root not available for %s\n", card_name);
+        DRM_ERROR("Debugfs root not available for %s\n", card_name);
         drm_dev_put(drm);
-        return -EIO;
+        return -EPROBE_DEFER;
     }
-printk("run line func: %s, line %d\n", __func__, __LINE__);
+
     ret = drm_add_dump_buffer(crtc, drm->primary->debugfs_root);
     if (ret) {
-        printk("drm_add_dump_buffer failed: %d\n", ret);
+        DRM_ERROR("drm_add_dump_buffer failed: %d\n", ret);
         drm_dev_put(drm);
         return ret;
     }
 
-printk("run line func: %s, line %d\n", __func__, __LINE__);
     platform_set_drvdata(pdev, drm);
     return 0;
 }
@@ -262,7 +279,38 @@ static struct platform_driver drm_debug_dump_driver = {
     },
 };
 
-module_platform_driver(drm_debug_dump_driver);
+static struct platform_device *drm_debug_dump_pdev;
+
+static int __init drm_debug_dump_init(void)
+{
+    int ret;
+
+    ret = platform_driver_register(&drm_debug_dump_driver);
+    if (ret)
+        return ret;
+    /*
+     * Self-create a platform device so probe runs immediately after insmod,
+     * without relying on a device tree node.
+     */
+    drm_debug_dump_pdev = platform_device_register_simple("drm-debug-dump", -1, NULL, 0);
+    if (IS_ERR(drm_debug_dump_pdev)) {
+        ret = PTR_ERR(drm_debug_dump_pdev);
+        platform_driver_unregister(&drm_debug_dump_driver);
+        return ret;
+    }
+
+    return 0;
+}
+
+static void __exit drm_debug_dump_exit(void)
+{
+    if (drm_debug_dump_pdev && !IS_ERR(drm_debug_dump_pdev))
+        platform_device_unregister(drm_debug_dump_pdev);
+    platform_driver_unregister(&drm_debug_dump_driver);
+}
+
+module_init(drm_debug_dump_init);
+module_exit(drm_debug_dump_exit);
 
 MODULE_AUTHOR("yinwg");
 MODULE_DESCRIPTION("drm debug dump driver");
