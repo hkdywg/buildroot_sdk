@@ -10,10 +10,13 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/file.h>
+#include <linux/fs.h>
+#include <linux/string.h>
+#include <linux/kernel.h>
 #include <drm/drm_atomic_uapi.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_file.h>
-#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem.h>
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
@@ -35,10 +38,8 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
     void *vaddr;
     char file_name[128];
     char format_name[5];
-    const char *ptr;
     struct file *file;
     size_t size;
-    int ret;
 
     snprintf(file_name, sizeof(file_name), "%p4cc", &dump_info->fb->format->format);
     strscpy(format_name, file_name, 5);
@@ -47,13 +48,18 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
         DUMP_BUF_PATH, dump_info->plane_name, dump_info->fb->width, dump_info->fb->height,
         dump_info->fb->pitches[0], format_name, frame_count);
 
-    vaddr = drm_gem_vmap(obj);
-    if(!vaddr)
-        return -1;
+    /* Use GEM object's vmap callback (exported API), not internal drm_gem_vmap */
+    if (!obj->funcs || !obj->funcs->vmap) {
+        printk("GEM object has no vmap callback\n");
+        return -EOPNOTSUPP;
+    }
+    vaddr = obj->funcs->vmap(obj);
+    if (!vaddr)
+        return -ENOMEM;
 
     size = (size_t)fb->height * fb->pitches[0];
 
-    file = filp_open(ptr, O_RDWR | O_CREAT, 0644);
+    file = filp_open(file_name, O_RDWR | O_CREAT, 0644);
     if(!IS_ERR(file)) {
         kernel_write(file, vaddr, size, 0);
         DRM_INFO("dump file name is:%s\n", file_name);
@@ -62,7 +68,8 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
         DRM_INFO("open %s failed\n", file_name);
     }
 
-    drm_gem_vunmap(obj, vaddr);
+    if (obj->funcs && obj->funcs->vunmap)
+        obj->funcs->vunmap(obj, vaddr);
 
     return 0;
 }
@@ -111,27 +118,28 @@ static ssize_t drm_dump_buffer_write(struct file *file, const char __user *ubuf,
     struct seq_file *m = file->private_data;
     struct drm_crtc *crtc = m->private;
     char buf[14] = {};
-    const char *str;
     int dump_frames = 0;
-    int i = 0;
+    int i;
 
     if(len > sizeof(buf) - 1)
         return -EINVAL;
     if(copy_from_user(buf, ubuf, len))
         return -EFAULT;
-    buf[len - 1] = '\0';
+    buf[len] = '\0';
 
-    str = buf;
-    if(strncmp(buf, "dump", 4) == 0) {
-        if(isdigit(buf[4])) {
-            for(i = 4; i < strlen(buf); i++) {
-                dump_frames += temp_pow(10, (strlen(buf) - i - 1)) *
-                    (buf[i] - '0');
-            }
-        } else {
+    if (strncmp(buf, "dump", 4) == 0) {
+        if (len > 4 && isdigit(buf[4]))
+            kstrtoint(buf + 4, 10, &dump_frames);
+        if (dump_frames <= 0) {
             drm_modeset_lock_all(crtc->dev);
             drm_crtc_dump_plane_buffer(crtc);
             drm_modeset_unlock_all(crtc->dev);
+        } else {
+            for (i = 0; i < dump_frames; i++) {
+                drm_modeset_lock_all(crtc->dev);
+                drm_crtc_dump_plane_buffer(crtc);
+                drm_modeset_unlock_all(crtc->dev);
+            }
         }
     } else {
         return -EINVAL;
@@ -157,43 +165,40 @@ static int drm_add_dump_buffer(struct drm_crtc *crtc, struct dentry *root)
     dump_root = debugfs_create_dir("drm_dump", root);
     ent = debugfs_create_file("dump", 0644, dump_root, crtc, &drm_dump_buffer_fops);
     if(!ent) {
-        DRM_ERROR("create drm_dump err\n");
+        printk("create drm_dump err\n");
         debugfs_remove_recursive(dump_root);
     }
 
     return 0;
 }
 
-static int match_drm_device_by_name(struct device *dev, const void *data)
+/*
+ * Find DRM device by opening the device node (e.g. /dev/dri/card0).
+ */
+static struct drm_device *find_exist_drm_device(const char *card_name)
 {
-    const char *name = data;
+    struct file *filp;
+    struct drm_file *file_priv;
+    struct drm_device *drm = NULL;
+    char path[32];
 
-    if(dev && dev_name(dev) && !strcmp(dev_name(dev), name))
-        return 1;
-
-    return 0;
-}
-
-static struct drm_device *find_exist_drm_device(const char *name)
-{
-    struct drm_device *drm;
-    struct device *dev;
-    struct drm_minor *minor;
-
-    if(!name || !*name)
+    if (!card_name || !*card_name)
         return NULL;
 
-    dev = class_find_device(&drm_class, NULL, (void *)name, match_drm_device_by_name);
-    if(!dev)
+    snprintf(path, sizeof(path), "/dev/dri/%s", card_name);
+    filp = filp_open(path, O_RDONLY, 0);
+    if (IS_ERR(filp))
         return NULL;
 
-    minor = dev_get_drvdata(dev);
-    if(!minor || minor->type != DRM_MINOR_PRIMARY || !minor->dev) {
+    file_priv = filp->private_data;
+    if (!file_priv || !file_priv->minor || !file_priv->minor->dev) {
+        fput(filp);
         return NULL;
-    } else {
-        drm = minor->dev;
-        drm_dev_get(drm);
     }
+
+    drm = file_priv->minor->dev;
+    drm_dev_get(drm);
+    fput(filp);
 
     return drm;
 }
@@ -205,37 +210,47 @@ static int drm_debug_dump_probe(struct platform_device *pdev)
     const char *card_name = "card0";
     int ret;
 
+printk("run line func: %s, line %d\n", __func__, __LINE__);
     drm = find_exist_drm_device(card_name);
     if(!drm) {
-        DRM_ERROR("Cannot find drm device %s\n",  card_name);
+        printk("Cannot find drm device %s\n",  card_name);
         return -ENODEV;
     }
 
+printk("run line func: %s, line %d\n", __func__, __LINE__);
     crtc = drm_crtc_from_index(drm, 0);
-    if(crtc != NULL) {
-        DRM_ERROR("No enabled CRTC found on %s\n", card_name);
+    if (!crtc) {
+        printk("No enabled CRTC found on %s\n", card_name);
         drm_dev_put(drm);
         return -ENODEV;
     }
 
+printk("run line func: %s, line %d\n", __func__, __LINE__);
     /* check debugfs is usable */
     if(!drm->primary || !drm->primary->debugfs_root) {
-        DRM_ERROR("Debugfs root not available for %s\n", card_name);
+        printk("Debugfs root not available for %s\n", card_name);
         drm_dev_put(drm);
         return -EIO;
     }
-
+printk("run line func: %s, line %d\n", __func__, __LINE__);
     ret = drm_add_dump_buffer(crtc, drm->primary->debugfs_root);
-    if(ret) {
-        DRM_ERROR("drm_add_dump_buffer failed: %d\n", ret);
+    if (ret) {
+        printk("drm_add_dump_buffer failed: %d\n", ret);
+        drm_dev_put(drm);
         return ret;
     }
 
+printk("run line func: %s, line %d\n", __func__, __LINE__);
+    platform_set_drvdata(pdev, drm);
     return 0;
 }
 
 static int drm_debug_dump_remove(struct platform_device *pdev)
 {
+    struct drm_device *drm = platform_get_drvdata(pdev);
+
+    if (drm)
+        drm_dev_put(drm);
     return 0;
 }
 
