@@ -22,49 +22,7 @@
 #include <drm/drm_gem_framebuffer_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_modeset_helper.h>
-
-
-struct drm_self_test {
-    struct drm_device *dev;
-    struct work_struct commit_work;
-    struct workqueue_struct *workqueue;
-
-    struct drm_crtc *crtc;
-    struct drm_plane *plane;
-};
-
-struct drm_direct_show_buffer {
-    /* input */
-    u32 width;
-    u32 height;
-    u32 pixel_format;
-    /* output/layout */
-    u32 bpp;                /* bpp for plane 0 (for debug) */
-    u32 pitch[4];           
-    u32 offsets[4];           
-    size_t size;
-    
-    /* backing objects */
-    struct drm_gem_object *gem;
-    struct drm_framebuffer *fb;
-
-    /* export (optional) */
-    struct dma_buf *dmabuf; /* extra ref for kernel-side sync */
-    int dmabuf_fd;          /* exported fd for external modules/userspace */
-
-    /* kernel mapping (DMA helper local allocation) */
-    void *vaddr; 
-    void *plane_vaddr[4];    
-};
-
-struct drm_direct_show_commit_info {
-    struct drm_crtc *crtc;
-    struct drm_plane *plane;
-    struct drm_direct_show_buffer *buffer;
-    u32 src_x, src_y, src_w, src_h;
-    u32 dst_x, dst_y, dst_w, dst_h;
-    bool top_zpos;
-};
+#include "drm_debug.h"
 
 uint32_t drm_get_bpp(const struct drm_format_info *info)
 {
