@@ -1,0 +1,389 @@
+/*
+* drm_debug_direct_show.c 
+*   drm direct show for debug
+*
+* @copyright Copyright (c) 2022 Jiangsu New Vision Automotive Electronics Co.，Ltd. All rights reserved.
+*
+* Author: weigenyin <weigenyin@zjautomotive.com>
+*
+*/
+#include <linux/delay.h>
+#include <linux/init.h>
+#include <linux/kthread.h>
+#include <linux/module.h>
+#include <linux/workqueue.h>
+#include <linux/dma-buf.h>
+
+#include <drm/drm_atomic_uapi.h>
+#include <drm/drm_prime.h>
+#include <drm/drm_fb_helper.h>
+#include <drm/drm_framebuffer.h>
+#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem_framebuffer_helper.h>
+#include <drm/drm_fourcc.h>
+#include <drm/drm_modeset_helper.h>
+
+
+struct drm_self_test {
+    struct drm_device *dev;
+    struct work_struct commit_work;
+    struct workqueue_struct *workqueue;
+
+    struct drm_crtc *crtc;
+    struct drm_plane *plane;
+};
+
+struct drm_direct_show_buffer {
+    /* input */
+    u32 width;
+    u32 height;
+    u32 pixel_format;
+    /* output/layout */
+    u32 bpp;                /* bpp for plane 0 (for debug) */
+    u32 pitch[4];           
+    u32 offsets[4];           
+    size_t size;
+    
+    /* backing objects */
+    struct drm_gem_object *gem;
+    struct drm_framebuffer *fb;
+
+    /* export (optional) */
+    struct dma_buf *dmabuf; /* extra ref for kernel-side sync */
+    int dmabuf_fd;          /* exported fd for external modules/userspace */
+
+    /* kernel mapping (DMA helper local allocation) */
+    void *vaddr; 
+    void *plane_vaddr[4];    
+};
+
+struct drm_direct_show_commit_info {
+    struct drm_crtc *crtc;
+    struct drm_plane *plane;
+    struct drm_direct_show_buffer *buffer;
+    u32 src_x, src_y, src_w, src_h;
+    u32 dst_x, dst_y, dst_w, dst_h;
+    bool top_zpos;
+};
+
+uint32_t drm_get_bpp(const struct drm_format_info *info)
+{
+    if(info->cpp[0])
+        return info->cpp[0] * 8;
+
+    switch(info->format) {
+    case DRM_FORMAT_YUV420_8BIT:
+        return 12;
+    case DRM_FORMAT_YUV420_10BIT:
+        return 15;
+    case DRM_FORMAT_VUY101010:
+        return 30;
+    default:
+        break;
+    }
+
+    return 0;
+}
+
+static const struct drm_framebuffer_funcs drm_direct_show_fb_funcs = {
+    .destroy = drm_gem_fb_destroy,
+    .create_handle = drm_gem_fb_create_handle,
+};
+
+static struct drm_framebuffer *drm_direct_show_fb_alloc(struct drm_device *dev,
+                        const struct drm_direct_show_buffer *buffer)
+{
+    struct drm_mode_fb_cmd2 mode_cmd = { 0 };
+    const struct drm_format_info *info;
+    struct drm_framebuffer *fb;
+    unsigned int i;
+    int ret;
+
+    info = drm_format_info(buffer->pixel_format);
+    if(!info) 
+        return ERR_PTR(-EINVAL);
+
+    mode_cmd.width = buffer->width;
+    mode_cmd.height = buffer->height;
+    mode_cmd.pixel_format = buffer->pixel_format;
+
+    for(i = 0; i < info->num_planes && i < 4; i++) {
+        mode_cmd.pitches[i] = buffer->pitch[i];
+        mode_cmd.offsets[i] = buffer->offsets[i];
+    }
+
+    fb = kzalloc(sizeof(*fb), GFP_KERNEL);
+    if(!fb)
+        return ERR_PTR(-ENOMEM);
+
+    drm_helper_mode_fill_fb_struct(dev, fb, &mode_cmd);
+
+    for(i = 0; i < info->num_planes && i < 4; i++) {
+        fb->obj[i] = buffer->gem;
+        drm_gem_object_get(buffer->gem);
+    }
+    ret = drm_framebuffer_init(dev, fb, &drm_direct_show_fb_funcs);
+    if(ret) {
+        for(i = 0; i < info->num_planes && i < 4; i++) 
+            drm_gem_object_put(buffer->gem);
+        kfree(fb);
+        return ERR_PTR(ret);
+    }
+
+    return fb;
+}
+
+static int drm_direct_show_export_dmabuf(struct drm_direct_show_buffer *buffer)
+{
+    struct dma_buf *dmabuf;
+    int fd;
+
+    dmabuf = drm_gem_prime_export(buffer->gem, 0);
+    if(IS_ERR(dmabuf))
+        return PTR_ERR(dmabuf);
+
+    fd = dma_buf_fd(dmabuf, O_CLOEXEC);
+    if(fd < 0) {
+        dma_buf_put(dmabuf);
+        return fd;
+    }
+
+    get_dma_buf(dmabuf);
+
+    buffer->dmabuf = dmabuf;
+    buffer->dmabuf_fd = fd;
+
+    return 0;
+}
+
+static int drm_direct_show_calc_laylout(struct drm_direct_show_buffer *buffer)
+{
+    const struct drm_format_info *info;
+    unsigned int i;
+
+    info = drm_format_info(buffer->pixel_format);
+    if(!info)
+        return -EINVAL;
+
+    buffer->bpp = info->cpp[0] * 8;
+
+    for(i = 0; i < ARRAY_SIZE(buffer->pitch); i++) {
+        buffer->pitch[i] = 0;
+        buffer->offsets[i] = 0;
+        buffer->plane_vaddr[i] = NULL;
+    }
+
+    buffer->pitch[0] = ALIGN(buffer->width * info->cpp[0], 64);
+    buffer->offsets[0] = 0;
+    buffer->size = (size_t)buffer->pitch[0] * buffer->height;
+
+    for(i = 1; i < info->num_planes && i < ARRAY_SIZE(buffer->pitch); i++) {
+        u32 plane_w = DIV_ROUND_UP(buffer->width, info->hsub);
+        u32 plane_h = DIV_ROUND_UP(buffer->height, info->vsub);
+
+        buffer->offsets[i] = buffer->size;
+        buffer->pitch[i] = ALIGN(plane_w * info->cpp[i], 64);
+        buffer->size += (size_t)buffer->pitch[i] * plane_h;
+    }
+
+    return 0;
+}
+
+static inline struct drm_gem_object *drm_direct_show_dma_create(struct drm_device *drm,
+                                                        size_t size)
+{
+    struct drm_gem_cma_object *cma_obj = drm_gem_cma_create(drm, size);
+
+    if(IS_ERR(cma_obj))
+        return ERR_CAST(cma_obj);
+
+    return &cma_obj->base;
+}
+
+static inline void *drm_direct_show_dma_obj_vaddr(struct drm_gem_object *obj)
+{
+    return to_drm_gem_cma_obj(obj)->vaddr;
+}
+
+int drm_direct_show_alloc_buffer(struct drm_device *drm, 
+                    struct drm_direct_show_buffer *buffer)
+{
+    struct drm_gem_object *obj;
+    const struct drm_format_info *info;
+    unsigned int i;
+    int ret;
+
+    if(!drm || !buffer)
+        return -EINVAL;
+
+    ret = drm_direct_show_calc_laylout(buffer);
+    if(ret)
+        return ret;
+
+    obj = drm_direct_show_dma_create(drm, buffer->size);
+    if(IS_ERR(obj))
+        return PTR_ERR(obj);
+
+    buffer->gem = obj;
+    buffer->vaddr = drm_direct_show_dma_obj_vaddr(obj);
+    if(!buffer->vaddr) {
+        ret = -ENOMEM;
+        goto err_put_gem;
+    }
+
+    info = drm_format_info(buffer->pixel_format);
+    if(!info) {
+        ret = -EINVAL;
+        goto err_put_gem;
+    }
+
+    for(i = 0; i < info->num_planes && i < 4; i++) {
+        buffer->plane_vaddr[i] = buffer->vaddr + buffer->offsets[i];
+    }
+
+    buffer->fb = drm_direct_show_fb_alloc(drm, buffer);
+    if(IS_ERR(buffer->fb)) {
+        ret = PTR_ERR(buffer->fb);
+        buffer->fb = NULL;
+        goto err_put_gem;
+    }
+
+    ret = drm_direct_show_export_dmabuf(buffer);
+    if(ret) {
+        DRM_ERROR("export dmabuf failed\n");
+        goto err_put_fb;
+    }
+
+    return 0;
+
+err_put_fb:
+    if(buffer->fb) {
+        drm_framebuffer_put(buffer->fb);
+        buffer->fb = NULL;
+    }
+
+err_put_gem:
+    if(buffer->gem) {
+        drm_gem_object_put(buffer->gem);
+        buffer->gem = NULL;
+    }
+
+    return ret;
+}
+
+void drm_direct_show_free_buffer(struct drm_device *drm,
+                    struct drm_direct_show_buffer *buffer)
+{
+    struct drm_gem_object *obj = buffer->gem;
+
+    mutex_lock(&drm->object_name_lock);
+    if(obj->dma_buf) {
+        dma_buf_put(obj->dma_buf);
+        obj->dma_buf = NULL;
+    }
+    if(buffer->fb) {
+        drm_framebuffer_put(buffer->fb);
+        buffer->fb = NULL;
+    }
+    if(buffer->gem) {
+        drm_gem_object_put(buffer->gem);
+        buffer->gem = NULL;
+    }
+    buffer->vaddr = NULL;
+    mutex_unlock(&drm->object_name_lock);
+}
+
+struct drm_plane *drm_direct_show_get_plane(struct drm_device *drm, const char *name)
+{
+    struct drm_plane *plane;
+
+    drm_for_each_plane(plane, drm) {
+        if(!strncmp(plane->name, name, DRM_PROP_NAME_LEN))
+            break;
+    }
+    if(!plane) {
+        DRM_ERROR("Failed to find plane: %s\n", name);
+        return NULL;
+    }
+
+    return plane;
+}
+
+struct drm_crtc  *drm_direct_show_get_crtc(struct drm_device *drm, const char *name)
+{
+    struct drm_crtc *crtc = NULL;
+    bool crtc_active = false;
+
+    drm_for_each_crtc(crtc, drm) {
+        if(name == NULL) {
+            if(crtc->state && crtc->state->active) {
+                crtc_active = true;
+                break;
+            }
+        } else {
+            if(crtc->state && crtc->state->active &&
+               !strncmp(crtc->name, name, DRM_PROP_NAME_LEN)) {
+                crtc_active = true;
+                break;
+            }
+        }
+    }
+
+    if(crtc_active == false) {
+        DRM_ERROR("Failed to  find active crtc\n");
+        return NULL;
+    }
+
+    return crtc;
+}
+
+static struct drm_property *drm_direct_show_find_prop(struct drm_device *dev,
+                        struct drm_mode_object *obj, char *prop_name)
+{
+    int i;
+
+    if(!obj->properties)
+        return NULL;
+
+    for(i = 0; i < obj->properties->count; i++) {
+        struct drm_property *prop = obj->properties->properties[i];
+
+        if(!strncmp(prop->name, prop_name, DRM_PROP_NAME_LEN))
+            return prop;
+    }
+
+    return NULL;
+}
+
+int drm_direct_show_commit(struct drm_device *drm,
+                    struct drm_direct_show_commit_info *commit_info)
+{
+    int ret = 0;
+    struct drm_plane *plane = commit_info->plane;
+    struct drm_crtc *crtc = commit_info->crtc;
+    struct drm_framebuffer *fb = commit_info->buffer->fb;
+    struct drm_mode_config *conf = &drm->mode_config;
+    struct drm_property *zpos_prop;
+
+    zpos_prop = drm_direct_show_find_prop(drm, &plane->base, "zpos");
+    if(!zpos_prop)
+        DRM_ERROR("Failed to find plane zpos prop\n");
+
+    drm_modeset_lock_all(drm);
+    if(plane->funcs->update_plane)
+        ret = plane->funcs->update_plane(plane, crtc, fb,
+                                commit_info->dst_x, commit_info->dst_y,
+                                commit_info->dst_w, commit_info->dst_h,
+                                commit_info->src_x << 16,
+                                commit_info->src_y << 16,
+                                commit_info->src_w << 16,
+                                commit_info->src_h << 16,
+                                conf->acquire_ctx);
+    drm_modeset_unlock_all(drm);
+
+    return ret;
+}
+
+
+
+
