@@ -26,8 +26,10 @@
 #include <drm/drm_probe_helper.h>
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_fourcc.h>
+#include "drm_debug.h"
 
 #define DUMP_BUF_PATH           "/home/root"
+#define USER_BUFFER_NUM         2
 
 static char *card_name = "card0";
 module_param(card_name, charp, 0644);
@@ -38,6 +40,16 @@ struct drm_dump_info {
     struct drm_framebuffer *fb;
     struct drm_rect *src;
 };
+
+struct drm_debug_display {
+    struct drm_device *dev;
+    struct drm_crtc *crtc;
+    struct drm_plane *plane;
+
+    struct drm_direct_show_buffer *drm_buffer[USER_BUFFER_NUM];
+};
+
+static struct drm_debug_display display_info;
 
 static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_count)
 {
@@ -88,10 +100,11 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
 
 static int drm_dump_buffer_show(struct seq_file *m, void *data)
 {
-    seq_puts(m, "rcar dump buffer version: v1.0.0\n");
+    seq_puts(m, "rcar drm debug version: v1.0.0\n");
     seq_puts(m, "echo dump > dump Immediately dump the current frame\n");
     seq_puts(m, "echo dumpn > dump n is the number of dump frames\n");
     seq_puts(m, "dump path is /home/root\n");
+    seq_puts(m, "echo pattern > display Display colorbar direct in drm system");
 
     return 0;
 }
@@ -169,19 +182,127 @@ static const struct file_operations drm_dump_buffer_fops = {
     .release = single_release,
 };
 
-static int drm_add_dump_buffer(struct drm_crtc *crtc, struct dentry *root)
+static int drm_debug_alloc_buffer(struct drm_debug_display *drm_debug)
 {
-    struct dentry *dump_root;
-    struct dentry *ent;
+    int ret, i;
+    struct drm_direct_show_buffer *buffer;
 
-    dump_root = debugfs_create_dir("drm_dump", root);
-    if(!dump_root) {
+    for(i = 0; i < USER_BUFFER_NUM; i++) {
+        buffer = kmalloc(sizeof(struct drm_direct_show_buffer), GFP_KERNEL);
+        if(!buffer)
+            return -ENOMEM;
+        buffer->width = 1920; 
+        buffer->height = 1080;
+        buffer->pixel_format = DRM_FORMAT_BGR888;
+        ret = drm_direct_show_alloc_buffer(drm_debug->dev, buffer);
+        if(ret)
+            DRM_ERROR("Failed to alloc drm buffer\n");
+        display_info.drm_buffer[i] = buffer;
+    }
+
+    return 0;
+}
+
+static int drm_debug_display_open(struct inode *inode, struct file *file)
+{
+    struct drm_debug_display *drm_debug = inode->i_private;
+
+    return single_open(file, drm_dump_buffer_show, drm_debug);
+}
+
+static ssize_t drm_debug_display_write(struct file *file, const char __user *ubuf,
+                                size_t len, loff_t *offp)
+{
+    struct seq_file *m = file->private_data;
+    struct drm_debug_display *drm_debug = m->private;
+    struct drm_direct_show_commit_info commit_info;
+    struct drm_plane *plane;
+    struct drm_plane_state *state;
+    char buf[14] = {};
+    int ret;
+
+    if(len > sizeof(buf) - 1)
+        return -EINVAL;
+    if(copy_from_user(buf, ubuf, len))
+        return -EFAULT;
+    buf[len] = '\0';
+
+    if (strncmp(buf, "pattern", 7) == 0) {
+        if(!drm_debug->drm_buffer[0]) {
+            ret = drm_debug_alloc_buffer(drm_debug);
+        }
+        if(drm_debug->drm_buffer[0]) {
+            drm_fill_color_bar(drm_debug->drm_buffer[0]->pixel_format, 
+                               drm_debug->drm_buffer[0]->vaddr, 
+                               drm_debug->drm_buffer[0]->width, 
+                               drm_debug->drm_buffer[0]->height, 
+                               drm_debug->drm_buffer[0]->pitch[0]); 
+
+            drm_atomic_crtc_for_each_plane(plane, drm_debug->crtc) {
+                state = plane->state;
+                if(!state->fb)
+                    continue;
+                commit_info.crtc = drm_debug->crtc;
+                commit_info.plane = plane;
+                commit_info.src_x =  0;
+                commit_info.src_y =  0;
+                commit_info.src_w =  drm_debug->drm_buffer[0]->width;
+                commit_info.src_h =  drm_debug->drm_buffer[0]->height;
+                commit_info.dst_x =  0;
+                commit_info.dst_y =  0;
+                commit_info.dst_w =  commit_info.src_w;
+                commit_info.dst_h =  commit_info.src_h;
+                commit_info.top_zpos = true;
+                drm_direct_show_commit(drm_debug->dev, &commit_info);
+            }
+        }
+    } else {
+        return -EINVAL;
+    }
+
+    return len;
+}
+
+static const struct file_operations drm_debug_display_fops = {
+    .owner = THIS_MODULE,
+    .open = drm_debug_display_open,
+    .write = drm_debug_display_write,
+    .read = seq_read,
+    .llseek = seq_lseek,
+    .release = single_release,
+};
+
+static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
+{
+    struct dentry *drm_debug_root;
+    struct dentry *ent;
+    struct drm_crtc *crtc;
+
+    crtc = drm_crtc_from_index(drm, 0);
+    if (!crtc) {
+        DRM_ERROR("No enabled CRTC found on %s\n", card_name);
+        drm_dev_put(drm);
+        return -ENODEV;
+    }
+
+    drm_debug_root = debugfs_create_dir("drm_dump", root);
+    if(!drm_debug_root) {
         DRM_ERROR("create drm_dump err\n");
     }
-    ent = debugfs_create_file("dump", 0644, dump_root, crtc, &drm_dump_buffer_fops);
+
+    display_info.dev = drm;
+    display_info.crtc = crtc;
+
+    ent = debugfs_create_file("dump", 0644, drm_debug_root, &display_info, &drm_dump_buffer_fops);
     if(!ent) {
         DRM_ERROR("create drm_dump/dump err\n");
-        debugfs_remove_recursive(dump_root);
+        debugfs_remove_recursive(drm_debug_root);
+    }
+
+    ent = debugfs_create_file("display", 0644, drm_debug_root, drm, &drm_debug_display_fops);
+    if(!ent) {
+        DRM_ERROR("create drm debug display err\n");
+        debugfs_remove_recursive(drm_debug_root);
     }
 
     return 0;
@@ -227,22 +348,14 @@ static struct drm_device *find_exist_drm_device(const char *card_name)
     return drm;
 }
 
-static int drm_debug_dump_probe(struct platform_device *pdev)
+static int drm_debug_probe(struct platform_device *pdev)
 {
     struct drm_device *drm;
-    struct drm_crtc *crtc;
     int ret;
 
     drm = find_exist_drm_device(card_name);
     if (IS_ERR(drm))
         return PTR_ERR(drm);
-
-    crtc = drm_crtc_from_index(drm, 0);
-    if (!crtc) {
-        DRM_ERROR("No enabled CRTC found on %s\n", card_name);
-        drm_dev_put(drm);
-        return -ENODEV;
-    }
 
     /* check debugfs is usable */
     if(!drm->primary || !drm->primary->debugfs_root) {
@@ -251,9 +364,9 @@ static int drm_debug_dump_probe(struct platform_device *pdev)
         return -EPROBE_DEFER;
     }
 
-    ret = drm_add_dump_buffer(crtc, drm->primary->debugfs_root);
+    ret = drm_debug_add_file(drm, drm->primary->debugfs_root);
     if (ret) {
-        DRM_ERROR("drm_add_dump_buffer failed: %d\n", ret);
+        DRM_ERROR("drm_debug_add_file failed: %d\n", ret);
         drm_dev_put(drm);
         return ret;
     }
@@ -262,7 +375,7 @@ static int drm_debug_dump_probe(struct platform_device *pdev)
     return 0;
 }
 
-static int drm_debug_dump_remove(struct platform_device *pdev)
+static int drm_debug_remove(struct platform_device *pdev)
 {
     struct drm_device *drm = platform_get_drvdata(pdev);
 
@@ -271,46 +384,46 @@ static int drm_debug_dump_remove(struct platform_device *pdev)
     return 0;
 }
 
-static struct platform_driver drm_debug_dump_driver = {
-    .probe = drm_debug_dump_probe,
-    .remove = drm_debug_dump_remove,
+static struct platform_driver drm_debug_driver = {
+    .probe = drm_debug_probe,
+    .remove = drm_debug_remove,
     .driver = {
-        .name = "drm-debug-dump",
+        .name = "drm-debug",
     },
 };
 
-static struct platform_device *drm_debug_dump_pdev;
+static struct platform_device *drm_debug_pdev;
 
-static int __init drm_debug_dump_init(void)
+static int __init drm_debug_init(void)
 {
     int ret;
 
-    ret = platform_driver_register(&drm_debug_dump_driver);
+    ret = platform_driver_register(&drm_debug_driver);
     if (ret)
         return ret;
     /*
      * Self-create a platform device so probe runs immediately after insmod,
      * without relying on a device tree node.
      */
-    drm_debug_dump_pdev = platform_device_register_simple("drm-debug-dump", -1, NULL, 0);
-    if (IS_ERR(drm_debug_dump_pdev)) {
-        ret = PTR_ERR(drm_debug_dump_pdev);
-        platform_driver_unregister(&drm_debug_dump_driver);
+    drm_debug_pdev = platform_device_register_simple("drm-debug", -1, NULL, 0);
+    if (IS_ERR(drm_debug_pdev)) {
+        ret = PTR_ERR(drm_debug_pdev);
+        platform_driver_unregister(&drm_debug_driver);
         return ret;
     }
 
     return 0;
 }
 
-static void __exit drm_debug_dump_exit(void)
+static void __exit drm_debug_exit(void)
 {
-    if (drm_debug_dump_pdev && !IS_ERR(drm_debug_dump_pdev))
-        platform_device_unregister(drm_debug_dump_pdev);
-    platform_driver_unregister(&drm_debug_dump_driver);
+    if (drm_debug_pdev && !IS_ERR(drm_debug_pdev))
+        platform_device_unregister(drm_debug_pdev);
+    platform_driver_unregister(&drm_debug_driver);
 }
 
-module_init(drm_debug_dump_init);
-module_exit(drm_debug_dump_exit);
+module_init(drm_debug_init);
+module_exit(drm_debug_exit);
 
 MODULE_AUTHOR("yinwg");
 MODULE_DESCRIPTION("drm debug dump driver");
