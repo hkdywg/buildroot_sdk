@@ -187,6 +187,9 @@ static void fill_smpte_rgb24(const struct util_rgb_info *rgb, void *mem,
 	};
     unsigned int x, y;
 
+    if(!mem)
+        return;
+
     for(y = 0; y < height; ++y) {
         for(x = 0; x < width; ++x) {
             ((struct color_rgb24 *)mem)[x] = colors_pattern[x * 7 / width];
@@ -257,6 +260,9 @@ void drm_fill_color_bar(uint32_t format, void *planes[3], unsigned int width,
                 unsigned int height, unsigned int stride)
 {
     const struct util_format_info *info;
+
+    if(!planes)
+        return;
 
     info = util_format_info_find(format);
     if(info == NULL)

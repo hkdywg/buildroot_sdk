@@ -182,7 +182,8 @@ static const struct file_operations drm_dump_buffer_fops = {
     .release = single_release,
 };
 
-static int drm_debug_alloc_buffer(struct drm_debug_display *drm_debug)
+static int drm_debug_alloc_buffer(struct drm_debug_display *drm_debug,
+                            uint32_t width, uint32_t height, uint32_t format)
 {
     int ret, i;
     struct drm_direct_show_buffer *buffer;
@@ -191,9 +192,9 @@ static int drm_debug_alloc_buffer(struct drm_debug_display *drm_debug)
         buffer = kmalloc(sizeof(struct drm_direct_show_buffer), GFP_KERNEL);
         if(!buffer)
             return -ENOMEM;
-        buffer->width = 1920; 
-        buffer->height = 1080;
-        buffer->pixel_format = DRM_FORMAT_BGR888;
+        buffer->width = width; 
+        buffer->height = height;
+        buffer->pixel_format = format;
         ret = drm_direct_show_alloc_buffer(drm_debug->dev, buffer);
         if(ret)
             DRM_ERROR("Failed to alloc drm buffer\n");
@@ -226,35 +227,36 @@ static ssize_t drm_debug_display_write(struct file *file, const char __user *ubu
     if(copy_from_user(buf, ubuf, len))
         return -EFAULT;
     buf[len] = '\0';
-
     if (strncmp(buf, "pattern", 7) == 0) {
-        if(!drm_debug->drm_buffer[0]) {
-            ret = drm_debug_alloc_buffer(drm_debug);
-        }
-        if(drm_debug->drm_buffer[0]) {
+        drm_atomic_crtc_for_each_plane(plane, drm_debug->crtc) {
+            state = plane->state;
+            if(!state->fb)
+                continue;
+            if(!drm_debug->drm_buffer[0]) {
+                ret = drm_debug_alloc_buffer(drm_debug, state->fb->width,
+                                    state->fb->height, DRM_FORMAT_BGR888);
+            }
             drm_fill_color_bar(drm_debug->drm_buffer[0]->pixel_format, 
-                               drm_debug->drm_buffer[0]->vaddr, 
+                               drm_debug->drm_buffer[0]->plane_vaddr, 
                                drm_debug->drm_buffer[0]->width, 
                                drm_debug->drm_buffer[0]->height, 
                                drm_debug->drm_buffer[0]->pitch[0]); 
 
-            drm_atomic_crtc_for_each_plane(plane, drm_debug->crtc) {
-                state = plane->state;
-                if(!state->fb)
-                    continue;
-                commit_info.crtc = drm_debug->crtc;
-                commit_info.plane = plane;
-                commit_info.src_x =  0;
-                commit_info.src_y =  0;
-                commit_info.src_w =  drm_debug->drm_buffer[0]->width;
-                commit_info.src_h =  drm_debug->drm_buffer[0]->height;
-                commit_info.dst_x =  0;
-                commit_info.dst_y =  0;
-                commit_info.dst_w =  commit_info.src_w;
-                commit_info.dst_h =  commit_info.src_h;
-                commit_info.top_zpos = true;
-                drm_direct_show_commit(drm_debug->dev, &commit_info);
-            }
+            commit_info.crtc = drm_debug->crtc;
+            commit_info.plane = plane;
+            commit_info.buffer = drm_debug->drm_buffer[0];
+            commit_info.src_x =  0;
+            commit_info.src_y =  0;
+            commit_info.src_w =  drm_debug->drm_buffer[0]->width;
+            commit_info.src_h =  drm_debug->drm_buffer[0]->height;
+            commit_info.dst_x =  0;
+            commit_info.dst_y =  0;
+            commit_info.dst_w =  commit_info.src_w;
+            commit_info.dst_h =  commit_info.src_h;
+            commit_info.top_zpos = true;
+            ret = drm_direct_show_commit(drm_debug->dev, &commit_info);
+            if (ret)
+                DRM_ERROR("drm_direct_show_commit failed: %d\n", ret);
         }
     } else {
         return -EINVAL;
@@ -285,7 +287,7 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
         return -ENODEV;
     }
 
-    drm_debug_root = debugfs_create_dir("drm_dump", root);
+    drm_debug_root = debugfs_create_dir("drm_debug", root);
     if(!drm_debug_root) {
         DRM_ERROR("create drm_dump err\n");
     }
@@ -293,13 +295,13 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
     display_info.dev = drm;
     display_info.crtc = crtc;
 
-    ent = debugfs_create_file("dump", 0644, drm_debug_root, &display_info, &drm_dump_buffer_fops);
+    ent = debugfs_create_file("dump", 0644, drm_debug_root, crtc, &drm_dump_buffer_fops);
     if(!ent) {
         DRM_ERROR("create drm_dump/dump err\n");
         debugfs_remove_recursive(drm_debug_root);
     }
 
-    ent = debugfs_create_file("display", 0644, drm_debug_root, drm, &drm_debug_display_fops);
+    ent = debugfs_create_file("display", 0644, drm_debug_root, &display_info, &drm_debug_display_fops);
     if(!ent) {
         DRM_ERROR("create drm debug display err\n");
         debugfs_remove_recursive(drm_debug_root);
