@@ -68,6 +68,7 @@ static struct drm_framebuffer *drm_direct_show_fb_alloc(struct drm_device *dev,
     for(i = 0; i < info->num_planes && i < 4; i++) {
         mode_cmd.pitches[i] = buffer->pitch[i];
         mode_cmd.offsets[i] = buffer->offsets[i];
+        printk("mode_cmd.pitches[i] = %d\n", mode_cmd.pitches[i]);
     }
 
     fb = kzalloc(sizeof(*fb), GFP_KERNEL);
@@ -131,7 +132,7 @@ static int drm_direct_show_calc_laylout(struct drm_direct_show_buffer *buffer)
         buffer->plane_vaddr[i] = NULL;
     }
 
-    buffer->pitch[0] = ALIGN(buffer->width * info->cpp[0], 64);
+    buffer->pitch[0] = ALIGN(buffer->width * info->cpp[0], 8);
     buffer->offsets[0] = 0;
     buffer->size = (size_t)buffer->pitch[0] * buffer->height;
 
@@ -140,7 +141,7 @@ static int drm_direct_show_calc_laylout(struct drm_direct_show_buffer *buffer)
         u32 plane_h = DIV_ROUND_UP(buffer->height, info->vsub);
 
         buffer->offsets[i] = buffer->size;
-        buffer->pitch[i] = ALIGN(plane_w * info->cpp[i], 64);
+        buffer->pitch[i] = ALIGN(plane_w * info->cpp[i], 8);
         buffer->size += (size_t)buffer->pitch[i] * plane_h;
     }
 
