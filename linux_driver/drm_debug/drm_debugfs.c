@@ -234,7 +234,8 @@ static ssize_t drm_debug_display_write(struct file *file, const char __user *ubu
                 continue;
             if(!drm_debug->drm_buffer[0]) {
                 ret = drm_debug_alloc_buffer(drm_debug, state->fb->width,
-                                    state->fb->height, DRM_FORMAT_BGR888);
+                                    state->fb->height, DRM_FORMAT_ARGB8888);
+//DRM_FORMAT_BGR888
             }
             drm_fill_color_bar(drm_debug->drm_buffer[0]->pixel_format, 
                                drm_debug->drm_buffer[0]->plane_vaddr, 

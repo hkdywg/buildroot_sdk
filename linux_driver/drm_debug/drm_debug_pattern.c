@@ -215,9 +215,9 @@ static void fill_smpte_rgb32(const struct util_rgb_info *rgb, void *mem,
 
     for(y = 0; y < height; ++y) {
         for(x = 0; x < width; ++x) {
-            ((uint16_t *)mem)[x] = colors_pattern[x * 7 / width];
+            ((uint32_t *)mem)[x] = colors_pattern[x * 7 / width];
         }
-        mem += stride;
+        mem = (uint8_t *)mem + stride;
     }
 }
 
