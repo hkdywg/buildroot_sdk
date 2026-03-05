@@ -49,7 +49,7 @@ static const struct drm_framebuffer_funcs drm_direct_show_fb_funcs = {
     .create_handle = drm_gem_fb_create_handle,
 };
 
-static struct drm_framebuffer *drm_direct_show_fb_alloc(struct drm_device *dev,
+struct drm_framebuffer *drm_direct_show_fb_alloc(struct drm_device *dev,
                         const struct drm_direct_show_buffer *buffer)
 {
     struct drm_mode_fb_cmd2 mode_cmd = { 0 };
@@ -332,7 +332,7 @@ struct drm_crtc *drm_direct_show_get_crtc(struct drm_device *drm, const char *na
 }
 EXPORT_SYMBOL_GPL(drm_direct_show_get_crtc);
 
-static struct drm_property *drm_direct_show_find_prop(struct drm_device *dev,
+struct drm_property *drm_direct_show_find_prop(struct drm_device *dev,
                         struct drm_mode_object *obj, const char *prop_name)
 {
     int i;
