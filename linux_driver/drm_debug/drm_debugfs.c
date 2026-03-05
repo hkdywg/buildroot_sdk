@@ -46,6 +46,8 @@ struct drm_debug_display {
     struct drm_device *dev;
     struct drm_crtc *crtc;
     struct drm_plane *plane;
+    struct work_struct dump_work;
+    uint32_t dump_frame_count;
 
     struct drm_direct_show_buffer *drm_buffer[USER_BUFFER_NUM];
 };
@@ -142,10 +144,10 @@ static ssize_t drm_dump_buffer_write(struct file *file, const char __user *ubuf,
                                 size_t len, loff_t *offp)
 {
     struct seq_file *m = file->private_data;
-    struct drm_crtc *crtc = m->private;
+    struct drm_debug_display *drm_debug = m->private;
     char buf[14] = {};
     int dump_frames = 0;
-    int i, ret;
+    int ret;
 
     if(len > sizeof(buf) - 1)
         return -EINVAL;
@@ -158,24 +160,36 @@ static ssize_t drm_dump_buffer_write(struct file *file, const char __user *ubuf,
             ret = kstrtoint(buf + 4, 10, &dump_frames);
             printk("dump_frames is %d\n", dump_frames);
         }
-        if (dump_frames <= 0) {
-            drm_modeset_lock_all(crtc->dev);
-            drm_crtc_dump_plane_buffer(crtc, 0);
-            drm_modeset_unlock_all(crtc->dev);
-        } else {
-            for (i = 0; i < dump_frames; i++) {
-                drm_wait_one_vblank(crtc->dev, drm_crtc_index(crtc));
-                drm_modeset_lock_all(crtc->dev);
-                drm_crtc_dump_plane_buffer(crtc, i);
-                drm_modeset_unlock_all(crtc->dev);
-            }
-        }
+        drm_debug->dump_frame_count = dump_frames;
+        schedule_work(&(drm_debug->dump_work));
     } else {
         return -EINVAL;
     }
 
     return len;
 }
+
+static void drm_dump_frame_work(struct work_struct *work)
+{
+    struct drm_debug_display *drm_debug = container_of(work, struct drm_debug_display, dump_work); 
+    struct drm_crtc *crtc = drm_debug->crtc;
+    uint8_t i;
+
+    if (drm_debug->dump_frame_count == 0) {
+        drm_modeset_lock_all(crtc->dev);
+        drm_wait_one_vblank(crtc->dev, drm_crtc_index(crtc));
+        drm_crtc_dump_plane_buffer(crtc, 0);
+        drm_modeset_unlock_all(crtc->dev);
+    } else {
+        for (i = 0; i < drm_debug->dump_frame_count; i++) {
+            drm_wait_one_vblank(crtc->dev, drm_crtc_index(crtc));
+            drm_modeset_lock_all(crtc->dev);
+            drm_crtc_dump_plane_buffer(crtc, i);
+            drm_modeset_unlock_all(crtc->dev);
+        }
+    }
+}
+
 
 static const struct file_operations drm_dump_buffer_fops = {
     .owner = THIS_MODULE,
@@ -299,7 +313,7 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
     display_info.dev = drm;
     display_info.crtc = crtc;
 
-    ent = debugfs_create_file("dump", 0644, drm_debug_root, crtc, &drm_dump_buffer_fops);
+    ent = debugfs_create_file("dump", 0644, drm_debug_root, &display_info, &drm_dump_buffer_fops);
     if(!ent) {
         DRM_ERROR("create drm_dump/dump err\n");
         debugfs_remove_recursive(drm_debug_root);
@@ -369,6 +383,8 @@ static int drm_debug_probe(struct platform_device *pdev)
         drm_dev_put(drm);
         return -EPROBE_DEFER;
     }
+
+    INIT_WORK(&display_info.dump_work, drm_dump_frame_work);
 
     ret = drm_debug_add_file(drm, drm->primary->debugfs_root);
     if (ret) {
