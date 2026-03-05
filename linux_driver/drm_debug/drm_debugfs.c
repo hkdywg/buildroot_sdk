@@ -17,6 +17,7 @@
 #include <linux/kernel.h>
 #include <linux/uaccess.h>
 #include <drm/drm_print.h>
+#include <drm/drm_vblank.h>
 #include <drm/drm_atomic_uapi.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_file.h>
@@ -51,7 +52,7 @@ struct drm_debug_display {
 
 static struct drm_debug_display display_info;
 
-static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_count)
+static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_num)
 {
     struct drm_framebuffer *fb = dump_info->fb;
     struct drm_gem_object *obj = drm_gem_fb_get_obj(fb, 0);
@@ -67,7 +68,7 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_coun
     
     snprintf(file_name, 100, "%s/%s_fb-%dx%d_stride-%d_%s_%d.bin",
         DUMP_BUF_PATH, dump_info->plane_name, dump_info->fb->width, dump_info->fb->height,
-        dump_info->fb->pitches[0], format_name, frame_count);
+        dump_info->fb->pitches[0], format_name, frame_num);
 
     if (!obj)
         return -ENOENT;
@@ -116,7 +117,7 @@ static int drm_dump_buffer_open(struct inode *inode, struct file *file)
     return single_open(file, drm_dump_buffer_show, crtc);
 }
 
-static int drm_crtc_dump_plane_buffer(struct drm_crtc *crtc)
+static int drm_crtc_dump_plane_buffer(struct drm_crtc *crtc, int frame_num)
 {
     struct drm_plane *plane;
     struct drm_plane_state *state;
@@ -131,7 +132,7 @@ static int drm_crtc_dump_plane_buffer(struct drm_crtc *crtc)
         dump_info.fb = state->fb;
         dump_info.src = &state->src;
 
-        drm_dump_plane_buffer(&dump_info, 1);
+        drm_dump_plane_buffer(&dump_info, frame_num);
     }
 
     return 0;
@@ -144,7 +145,7 @@ static ssize_t drm_dump_buffer_write(struct file *file, const char __user *ubuf,
     struct drm_crtc *crtc = m->private;
     char buf[14] = {};
     int dump_frames = 0;
-    int i;
+    int i, ret;
 
     if(len > sizeof(buf) - 1)
         return -EINVAL;
@@ -153,16 +154,19 @@ static ssize_t drm_dump_buffer_write(struct file *file, const char __user *ubuf,
     buf[len] = '\0';
 
     if (strncmp(buf, "dump", 4) == 0) {
-        if (len > 4 && isdigit(buf[4]))
-            kstrtoint(buf + 4, 10, &dump_frames);
+        if (len > 4 && isdigit(buf[4])) {
+            ret = kstrtoint(buf + 4, 10, &dump_frames);
+            printk("dump_frames is %d\n", dump_frames);
+        }
         if (dump_frames <= 0) {
             drm_modeset_lock_all(crtc->dev);
-            drm_crtc_dump_plane_buffer(crtc);
+            drm_crtc_dump_plane_buffer(crtc, 0);
             drm_modeset_unlock_all(crtc->dev);
         } else {
             for (i = 0; i < dump_frames; i++) {
+                drm_wait_one_vblank(crtc->dev, drm_crtc_index(crtc));
                 drm_modeset_lock_all(crtc->dev);
-                drm_crtc_dump_plane_buffer(crtc);
+                drm_crtc_dump_plane_buffer(crtc, i);
                 drm_modeset_unlock_all(crtc->dev);
             }
         }
@@ -235,7 +239,6 @@ static ssize_t drm_debug_display_write(struct file *file, const char __user *ubu
             if(!drm_debug->drm_buffer[0]) {
                 ret = drm_debug_alloc_buffer(drm_debug, state->fb->width,
                                     state->fb->height, DRM_FORMAT_BGR888);
-//DRM_FORMAT_BGR888
             }
             drm_fill_color_bar(drm_debug->drm_buffer[0]->pixel_format, 
                                drm_debug->drm_buffer[0]->plane_vaddr, 
