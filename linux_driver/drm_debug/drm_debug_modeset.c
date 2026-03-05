@@ -29,18 +29,13 @@
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_debugfs.h>
 
-#define MAX_DRM_DEVICES  16
+typedef int (*seq_show_t)(struct seq_file *, void *);
 
-static char *card_name = "card0";
-module_param(card_name, charp, 0644);
-MODULE_PARM_DESC(card_name, "DRM card node name, e.g. card0");
-
-struct drm_modeset_debug {
-    struct drm_device *drm;
-    struct dentry *debug_root;
+struct drm_modeset_debugfs_entry {
+    const char *name;
+    seq_show_t show_func;
 };
 
-static struct drm_modeset_debug modeset_debug;
 
 static const char *drm_connector_status_name(enum drm_connector_status status)
 {
@@ -338,8 +333,7 @@ static void drm_modeset_print_device_info(struct seq_file *m, struct drm_device 
 
 static int drm_modeset_show_crtcs(struct seq_file *m, void *data)
 {
-    struct drm_modeset_debug *debug = m->private;
-    struct drm_device *drm = debug->drm;
+    struct drm_device *drm = m->private;
     struct drm_crtc *crtc;
 
     if (!drm)
@@ -360,8 +354,7 @@ static int drm_modeset_show_crtcs(struct seq_file *m, void *data)
 
 static int drm_modeset_show_planes(struct seq_file *m, void *data)
 {
-    struct drm_modeset_debug *debug = m->private;
-    struct drm_device *drm = debug->drm;
+    struct drm_device *drm = m->private;
     struct drm_plane *plane;
 
     if (!drm)
@@ -382,8 +375,7 @@ static int drm_modeset_show_planes(struct seq_file *m, void *data)
 
 static int drm_modeset_show_connectors(struct seq_file *m, void *data)
 {
-    struct drm_modeset_debug *debug = m->private;
-    struct drm_device *drm = debug->drm;
+    struct drm_device *drm = m->private;
     struct drm_connector *connector;
     struct drm_connector_list_iter conn_iter;
 
@@ -409,8 +401,7 @@ static int drm_modeset_show_connectors(struct seq_file *m, void *data)
 
 static int drm_modeset_show_encoders(struct seq_file *m, void *data)
 {
-    struct drm_modeset_debug *debug = m->private;
-    struct drm_device *drm = debug->drm;
+    struct drm_device *drm = m->private;
     struct drm_encoder *encoder;
 
     if (!drm)
@@ -431,8 +422,7 @@ static int drm_modeset_show_encoders(struct seq_file *m, void *data)
 
 static int drm_modeset_show_framebuffers(struct seq_file *m, void *data)
 {
-    struct drm_modeset_debug *debug = m->private;
-    struct drm_device *drm = debug->drm;
+    struct drm_device *drm = m->private;
     struct drm_framebuffer *fb;
     int count = 0;
 
@@ -457,8 +447,7 @@ static int drm_modeset_show_framebuffers(struct seq_file *m, void *data)
 
 static int drm_modeset_show_device(struct seq_file *m, void *data)
 {
-    struct drm_modeset_debug *debug = m->private;
-    struct drm_device *drm = debug->drm;
+    struct drm_device *drm = m->private;
 
     if (!drm)
         return -ENODEV;
@@ -469,8 +458,7 @@ static int drm_modeset_show_device(struct seq_file *m, void *data)
 
 static int drm_modeset_show_summary(struct seq_file *m, void *data)
 {
-    struct drm_modeset_debug *debug = m->private;
-    struct drm_device *drm = debug->drm;
+    struct drm_device *drm = m->private;
     struct drm_crtc *crtc;
     struct drm_plane *plane;
     struct drm_connector *connector;
@@ -484,7 +472,6 @@ static int drm_modeset_show_summary(struct seq_file *m, void *data)
     seq_printf(m, "===========================================\n");
     seq_printf(m, "DRM Status Summary\n");
     seq_printf(m, "===========================================\n");
-    seq_printf(m, "Device: %s (%s)\n", drm->driver->name, card_name);
 
     drm_modeset_lock_all(drm);
 
@@ -529,9 +516,28 @@ static int drm_modeset_show_summary(struct seq_file *m, void *data)
     return 0;
 }
 
+
+struct drm_modeset_debugfs_entry modset_debug_entry[] = {
+    { "summary",       drm_modeset_show_summary },
+    { "device",        drm_modeset_show_device },
+    { "crtcs",         drm_modeset_show_crtcs },
+    { "planes",        drm_modeset_show_planes },
+    { "connectors",    drm_modeset_show_connectors },
+    { "encoders",      drm_modeset_show_encoders },
+    { "framebuffers",  drm_modeset_show_framebuffers },
+};
+
 static int drm_modeset_debug_open(struct inode *inode, struct file *file)
 {
-    return single_open(file, drm_modeset_show_summary, inode->i_private);
+    uint8_t i;
+    const char *name = file->f_path.dentry->d_name.name;
+
+    for (i = 0; i < ARRAY_SIZE(modset_debug_entry); i++) {
+        if (!strcmp(name, modset_debug_entry[i].name))
+            return single_open(file, modset_debug_entry[i].show_func, inode->i_private);
+    }
+
+    return -EINVAL;
 }
 
 static const struct file_operations drm_modeset_fops = {
@@ -542,9 +548,9 @@ static const struct file_operations drm_modeset_fops = {
     .release = single_release,
 };
 
-static int drm_modeset_debugfs_init(struct drm_device *drm)
+int drm_modeset_debugfs_init(struct drm_device *drm, struct dentry *root)
 {
-    struct dentry *root;
+    uint8_t i;
 
     if (!drm->primary || !drm->primary->debugfs_root) {
         DRM_DEBUG("No debugfs root available\n");
@@ -557,16 +563,10 @@ static int drm_modeset_debugfs_init(struct drm_device *drm)
         return PTR_ERR(root);
     }
 
-    modeset_debug.drm = drm;
-    modeset_debug.debug_root = root;
 
-    debugfs_create_file("summary", 0444, root, &modeset_debug, &drm_modeset_fops);
-    debugfs_create_file("device", 0444, root, &modeset_debug, &drm_modeset_fops);
-    debugfs_create_file("crtcs", 0444, root, &modeset_debug, &drm_modeset_fops);
-    debugfs_create_file("planes", 0444, root, &modeset_debug, &drm_modeset_fops);
-    debugfs_create_file("connectors", 0444, root, &modeset_debug, &drm_modeset_fops);
-    debugfs_create_file("encoders", 0444, root, &modeset_debug, &drm_modeset_fops);
-    debugfs_create_file("framebuffers", 0444, root, &modeset_debug, &drm_modeset_fops);
+    for (i = 0; i < ARRAY_SIZE(modset_debug_entry); i++) {
+        debugfs_create_file(modset_debug_entry[i].name, 0444, root, drm, &drm_modeset_fops);
+    }
 
     DRM_INFO("DRM modeset debugfs initialized at /sys/kernel/debug/dri/%d/drm_modeset\n",
          drm->primary->index);
