@@ -49,6 +49,9 @@ void drm_fill_color_bar(uint32_t format, void *planes[3], unsigned int width,
 int drm_direct_show_alloc_buffer(struct drm_device *drm, 
                     struct drm_direct_show_buffer *buffer);
 
+void drm_direct_show_free_buffer(struct drm_device *drm,
+                    struct drm_direct_show_buffer *buffer);
+
 int drm_direct_show_commit(struct drm_device *drm,
                     struct drm_direct_show_commit_info *commit_info);
 

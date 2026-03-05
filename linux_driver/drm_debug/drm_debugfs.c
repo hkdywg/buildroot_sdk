@@ -64,18 +64,18 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_num)
     struct file *file;
     size_t size;
     loff_t pos = 0;
+    int ret = 0;
 
     snprintf(file_name, sizeof(file_name), "%p4cc", &dump_info->fb->format->format);
     strscpy(format_name, file_name, 5);
     
-    snprintf(file_name, 100, "%s/%s_fb-%dx%d_stride-%d_%s_%d.bin",
+    snprintf(file_name, 128, "%s/%s_fb-%dx%d_stride-%d_%s_%d.bin",
         DUMP_BUF_PATH, dump_info->plane_name, dump_info->fb->width, dump_info->fb->height,
         dump_info->fb->pitches[0], format_name, frame_num);
 
     if (!obj)
         return -ENOENT;
 
-    /* Use GEM object's vmap callback (exported API), not internal drm_gem_vmap */
     if (!obj->funcs || !obj->funcs->vmap) {
         DRM_ERROR("GEM object has no vmap callback\n");
         return -EOPNOTSUPP;
@@ -87,18 +87,23 @@ static int drm_dump_plane_buffer(struct drm_dump_info *dump_info, int frame_num)
     size = (size_t)fb->height * fb->pitches[0];
 
     file = filp_open(file_name, O_RDWR | O_CREAT, 0644);
-    if(!IS_ERR(file)) {
-        kernel_write(file, vaddr, size, &pos);
-        DRM_INFO("dump file name is:%s\n", file_name);
-        filp_close(file, NULL);
+    if (IS_ERR(file)) {
+        DRM_ERROR("open %s failed: %ld\n", file_name, PTR_ERR(file));
+        ret = PTR_ERR(file);
     } else {
-        DRM_INFO("open %s failed\n", file_name);
+        ret = kernel_write(file, vaddr, size, &pos);
+        if (ret < 0) {
+            DRM_ERROR("write %s failed: %d\n", file_name, ret);
+        } else {
+            DRM_INFO("dump file name is:%s\n", file_name);
+        }
+        filp_close(file, NULL);
     }
 
     if (obj->funcs && obj->funcs->vunmap)
         obj->funcs->vunmap(obj, vaddr);
 
-    return 0;
+    return ret;
 }
 
 static int drm_dump_buffer_show(struct seq_file *m, void *data)
@@ -114,9 +119,9 @@ static int drm_dump_buffer_show(struct seq_file *m, void *data)
 
 static int drm_dump_buffer_open(struct inode *inode, struct file *file)
 {
-    struct drm_crtc *crtc = inode->i_private;
+    struct drm_debug_display *drm_debug = inode->i_private;
 
-    return single_open(file, drm_dump_buffer_show, crtc);
+    return single_open(file, drm_dump_buffer_show, drm_debug);
 }
 
 static int drm_crtc_dump_plane_buffer(struct drm_crtc *crtc, int frame_num)
@@ -127,7 +132,7 @@ static int drm_crtc_dump_plane_buffer(struct drm_crtc *crtc, int frame_num)
 
     drm_atomic_crtc_for_each_plane(plane, crtc) {
         state = plane->state;
-        if(!state->fb)
+        if (!state || !state->fb)
             continue;
 
         dump_info.plane_name = plane->name;
@@ -149,19 +154,23 @@ static ssize_t drm_dump_buffer_write(struct file *file, const char __user *ubuf,
     int dump_frames = 0;
     int ret;
 
-    if(len > sizeof(buf) - 1)
+    if (len > sizeof(buf) - 1)
         return -EINVAL;
-    if(copy_from_user(buf, ubuf, len))
+    if (copy_from_user(buf, ubuf, len))
         return -EFAULT;
     buf[len] = '\0';
 
     if (strncmp(buf, "dump", 4) == 0) {
-        if (len > 4 && isdigit(buf[4])) {
+        if (len > 5 && isdigit(buf[4])) {
             ret = kstrtoint(buf + 4, 10, &dump_frames);
-            printk("dump_frames is %d\n", dump_frames);
+            if (ret) {
+                DRM_ERROR("Invalid dump frame count\n");
+                return ret;
+            }
+            DRM_INFO("dump_frames is %d\n", dump_frames);
         }
         drm_debug->dump_frame_count = dump_frames;
-        schedule_work(&(drm_debug->dump_work));
+        schedule_work(&drm_debug->dump_work);
     } else {
         return -EINVAL;
     }
@@ -171,25 +180,22 @@ static ssize_t drm_dump_buffer_write(struct file *file, const char __user *ubuf,
 
 static void drm_dump_frame_work(struct work_struct *work)
 {
-    struct drm_debug_display *drm_debug = container_of(work, struct drm_debug_display, dump_work); 
+    struct drm_debug_display *drm_debug = container_of(work, struct drm_debug_display, dump_work);
     struct drm_crtc *crtc = drm_debug->crtc;
-    uint8_t i;
+    uint32_t frame_count;
+    uint32_t i;
 
-    if (drm_debug->dump_frame_count == 0) {
-        drm_modeset_lock_all(crtc->dev);
+    frame_count = drm_debug->dump_frame_count;
+    if (frame_count == 0)
+        frame_count = 1;
+
+    for (i = 0; i < frame_count; i++) {
         drm_wait_one_vblank(crtc->dev, drm_crtc_index(crtc));
-        drm_crtc_dump_plane_buffer(crtc, 0);
+        drm_modeset_lock_all(crtc->dev);
+        drm_crtc_dump_plane_buffer(crtc, i);
         drm_modeset_unlock_all(crtc->dev);
-    } else {
-        for (i = 0; i < drm_debug->dump_frame_count; i++) {
-            drm_wait_one_vblank(crtc->dev, drm_crtc_index(crtc));
-            drm_modeset_lock_all(crtc->dev);
-            drm_crtc_dump_plane_buffer(crtc, i);
-            drm_modeset_unlock_all(crtc->dev);
-        }
     }
 }
-
 
 static const struct file_operations drm_dump_buffer_fops = {
     .owner = THIS_MODULE,
@@ -200,26 +206,53 @@ static const struct file_operations drm_dump_buffer_fops = {
     .release = single_release,
 };
 
+static int drm_debug_free_buffers(struct drm_debug_display *drm_debug)
+{
+    int i;
+
+    for (i = 0; i < USER_BUFFER_NUM; i++) {
+        if (drm_debug->drm_buffer[i]) {
+            drm_direct_show_free_buffer(drm_debug->dev, drm_debug->drm_buffer[i]);
+            kfree(drm_debug->drm_buffer[i]);
+            drm_debug->drm_buffer[i] = NULL;
+        }
+    }
+
+    return 0;
+}
+
 static int drm_debug_alloc_buffer(struct drm_debug_display *drm_debug,
                             uint32_t width, uint32_t height, uint32_t format)
 {
     int ret, i;
     struct drm_direct_show_buffer *buffer;
 
-    for(i = 0; i < USER_BUFFER_NUM; i++) {
-        buffer = kmalloc(sizeof(struct drm_direct_show_buffer), GFP_KERNEL);
-        if(!buffer)
-            return -ENOMEM;
-        buffer->width = width; 
+    drm_debug_free_buffers(drm_debug);
+
+    for (i = 0; i < USER_BUFFER_NUM; i++) {
+        buffer = kzalloc(sizeof(struct drm_direct_show_buffer), GFP_KERNEL);
+        if (!buffer) {
+            ret = -ENOMEM;
+            goto err_free;
+        }
+
+        buffer->width = width;
         buffer->height = height;
         buffer->pixel_format = format;
         ret = drm_direct_show_alloc_buffer(drm_debug->dev, buffer);
-        if(ret)
-            DRM_ERROR("Failed to alloc drm buffer\n");
-        display_info.drm_buffer[i] = buffer;
+        if (ret) {
+            DRM_ERROR("Failed to alloc drm buffer: %d\n", ret);
+            kfree(buffer);
+            goto err_free;
+        }
+        drm_debug->drm_buffer[i] = buffer;
     }
 
     return 0;
+
+err_free:
+    drm_debug_free_buffers(drm_debug);
+    return ret;
 }
 
 static int drm_debug_display_open(struct inode *inode, struct file *file)
@@ -240,41 +273,50 @@ static ssize_t drm_debug_display_write(struct file *file, const char __user *ubu
     char buf[14] = {};
     int ret;
 
-    if(len > sizeof(buf) - 1)
+    if (len > sizeof(buf) - 1)
         return -EINVAL;
-    if(copy_from_user(buf, ubuf, len))
+    if (copy_from_user(buf, ubuf, len))
         return -EFAULT;
     buf[len] = '\0';
+
     if (strncmp(buf, "pattern", 7) == 0) {
         drm_atomic_crtc_for_each_plane(plane, drm_debug->crtc) {
             state = plane->state;
-            if(!state->fb)
+            if (!state || !state->fb)
                 continue;
-            if(!drm_debug->drm_buffer[0]) {
+
+            if (!drm_debug->drm_buffer[0]) {
                 ret = drm_debug_alloc_buffer(drm_debug, state->fb->width,
                                     state->fb->height, DRM_FORMAT_BGR888);
+                if (ret)
+                    return ret;
             }
+
             drm_fill_color_bar(drm_debug->drm_buffer[0]->pixel_format, 
                                drm_debug->drm_buffer[0]->plane_vaddr, 
                                drm_debug->drm_buffer[0]->width, 
                                drm_debug->drm_buffer[0]->height, 
                                drm_debug->drm_buffer[0]->pitch[0]); 
 
+            memset(&commit_info, 0, sizeof(commit_info));
             commit_info.crtc = drm_debug->crtc;
             commit_info.plane = plane;
             commit_info.buffer = drm_debug->drm_buffer[0];
-            commit_info.src_x =  0;
-            commit_info.src_y =  0;
-            commit_info.src_w =  drm_debug->drm_buffer[0]->width;
-            commit_info.src_h =  drm_debug->drm_buffer[0]->height;
-            commit_info.dst_x =  0;
-            commit_info.dst_y =  0;
-            commit_info.dst_w =  commit_info.src_w;
-            commit_info.dst_h =  commit_info.src_h;
+            commit_info.src_x = 0;
+            commit_info.src_y = 0;
+            commit_info.src_w = drm_debug->drm_buffer[0]->width;
+            commit_info.src_h = drm_debug->drm_buffer[0]->height;
+            commit_info.dst_x = 0;
+            commit_info.dst_y = 0;
+            commit_info.dst_w = commit_info.src_w;
+            commit_info.dst_h = commit_info.src_h;
             commit_info.top_zpos = true;
+
             ret = drm_direct_show_commit(drm_debug->dev, &commit_info);
-            if (ret)
+            if (ret) {
                 DRM_ERROR("drm_direct_show_commit failed: %d\n", ret);
+                return ret;
+            }
         }
     } else {
         return -EINVAL;
@@ -306,31 +348,32 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
     }
 
     drm_debug_root = debugfs_create_dir("drm_debug", root);
-    if(!drm_debug_root) {
-        DRM_ERROR("create drm_dump err\n");
+    if (IS_ERR(drm_debug_root)) {
+        DRM_ERROR("create drm_debug dir failed: %ld\n", PTR_ERR(drm_debug_root));
+        drm_dev_put(drm);
+        return PTR_ERR(drm_debug_root);
     }
 
     display_info.dev = drm;
     display_info.crtc = crtc;
 
-    ent = debugfs_create_file("dump", 0644, drm_debug_root, &display_info, &drm_dump_buffer_fops);
-    if(!ent) {
+    ent = debugfs_create_file("dump", 0444, drm_debug_root, &display_info, &drm_dump_buffer_fops);
+    if (!ent) {
         DRM_ERROR("create drm_dump/dump err\n");
         debugfs_remove_recursive(drm_debug_root);
+        return -ENOMEM;
     }
 
-    ent = debugfs_create_file("display", 0644, drm_debug_root, &display_info, &drm_debug_display_fops);
-    if(!ent) {
+    ent = debugfs_create_file("display", 0444, drm_debug_root, &display_info, &drm_debug_display_fops);
+    if (!ent) {
         DRM_ERROR("create drm debug display err\n");
         debugfs_remove_recursive(drm_debug_root);
+        return -ENOMEM;
     }
 
     return 0;
 }
 
-/*
- * Find DRM device by opening the device node (e.g. /dev/dri/card0).
- */
 static struct drm_device *find_exist_drm_device(const char *card_name)
 {
     struct file *filp;
@@ -346,10 +389,6 @@ static struct drm_device *find_exist_drm_device(const char *card_name)
     filp = filp_open(path, O_RDONLY, 0);
     if (IS_ERR(filp)) {
         err = PTR_ERR(filp);
-        /*
-         * card node might not be ready when this module loads (load ordering).
-         * Defer probing so the core can retry later.
-         */
         if (err == -ENOENT || err == -ENODEV)
             return ERR_PTR(-EPROBE_DEFER);
         return ERR_PTR(err);
@@ -377,8 +416,7 @@ static int drm_debug_probe(struct platform_device *pdev)
     if (IS_ERR(drm))
         return PTR_ERR(drm);
 
-    /* check debugfs is usable */
-    if(!drm->primary || !drm->primary->debugfs_root) {
+    if (!drm->primary || !drm->primary->debugfs_root) {
         DRM_ERROR("Debugfs root not available for %s\n", card_name);
         drm_dev_put(drm);
         return -EPROBE_DEFER;
@@ -389,6 +427,7 @@ static int drm_debug_probe(struct platform_device *pdev)
     ret = drm_debug_add_file(drm, drm->primary->debugfs_root);
     if (ret) {
         DRM_ERROR("drm_debug_add_file failed: %d\n", ret);
+        flush_work(&display_info.dump_work);
         drm_dev_put(drm);
         return ret;
     }
@@ -401,8 +440,12 @@ static int drm_debug_remove(struct platform_device *pdev)
 {
     struct drm_device *drm = platform_get_drvdata(pdev);
 
+    cancel_work_sync(&display_info.dump_work);
+    drm_debug_free_buffers(&display_info);
+
     if (drm)
         drm_dev_put(drm);
+
     return 0;
 }
 
@@ -423,10 +466,7 @@ static int __init drm_debug_init(void)
     ret = platform_driver_register(&drm_debug_driver);
     if (ret)
         return ret;
-    /*
-     * Self-create a platform device so probe runs immediately after insmod,
-     * without relying on a device tree node.
-     */
+
     drm_debug_pdev = platform_device_register_simple("drm-debug", -1, NULL, 0);
     if (IS_ERR(drm_debug_pdev)) {
         ret = PTR_ERR(drm_debug_pdev);
