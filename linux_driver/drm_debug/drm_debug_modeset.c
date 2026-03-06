@@ -28,6 +28,7 @@
 #include <drm/drm_encoder.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_debugfs.h>
+#include <drm/drm_atomic.h>
 
 struct drm_modeset_debugfs_entry {
     const char *name;
@@ -105,6 +106,64 @@ static const char *drm_plane_type_name(enum drm_plane_type type)
     }
 }
 
+static const char *drm_rotation_name(uint32_t rotation)
+{
+    switch (rotation & DRM_MODE_ROTATE_MASK) {
+    case DRM_MODE_ROTATE_0:
+        return "0";
+    case DRM_MODE_ROTATE_90:
+        return "90";
+    case DRM_MODE_ROTATE_180:
+        return "180";
+    case DRM_MODE_ROTATE_270:
+        return "270";
+    default:
+        return "Unknown";
+    }
+
+    return "Unknown";
+}
+
+static void drm_modeset_print_rotation(struct seq_file *m, struct drm_plane *plane,
+                    struct drm_plane_state *state)
+{
+    struct drm_property *rotation_prop;
+    uint32_t rotation;
+
+    rotation_prop = plane->rotation_property;
+    if (!rotation_prop)
+        return;
+
+    rotation = state->rotation;
+
+    seq_printf(m, "  rotation: %s", drm_rotation_name(rotation));
+
+    if (rotation & DRM_MODE_REFLECT_X)
+        seq_printf(m, " + reflect-x");
+    if (rotation & DRM_MODE_REFLECT_Y)
+        seq_printf(m, " + reflect-y");
+
+    seq_printf(m, " (0x%08x)\n", rotation);
+}
+
+#if 0
+static bool plane_supports_rotation(struct drm_plane *plane)
+{
+    uint64_t supported;
+
+    if(!plane->rotation_property)
+        return false;
+
+    supported = plane->rotation_property->values[0];
+
+    if(supported & (DRM_MODE_ROTATE_90 | DRM_MODE_ROTATE_180 |
+                    DRM_MODE_ROTATE_270 | DRM_MODE_REFLECT_X | DRM_MODE_REFLECT_Y))
+        return true;
+    
+    return false;
+}
+#endif
+
 static void drm_modeset_print_crtc_info(struct seq_file *m, struct drm_crtc *crtc)
 {
     struct drm_crtc_state *state = crtc->state;
@@ -180,6 +239,8 @@ static void drm_modeset_print_plane_info(struct seq_file *m, struct drm_plane *p
            state->pixel_blend_mode == DRM_MODE_BLEND_PIXEL_NONE ? "none" :
            state->pixel_blend_mode == DRM_MODE_BLEND_PREMULTI ? "premulti" :
            "coverage");
+
+    drm_modeset_print_rotation(m, plane, state);
 
 print_crtc:
     if (state->crtc)
@@ -507,8 +568,7 @@ static int drm_modeset_show_summary(struct seq_file *m, void *data)
     return 0;
 }
 
-
-struct drm_modeset_debugfs_entry modset_debug_entry[] = {
+struct drm_modeset_debugfs_entry modeset_debug_entry[] = {
     { "summary",       drm_modeset_show_summary },
     { "device",        drm_modeset_show_device },
     { "crtcs",         drm_modeset_show_crtcs },
@@ -518,14 +578,233 @@ struct drm_modeset_debugfs_entry modset_debug_entry[] = {
     { "framebuffers",  drm_modeset_show_framebuffers },
 };
 
+static int drm_modeset_set_plane_rotation(struct drm_device *drm,
+                      const char *plane_name, uint32_t rotation)
+{
+    struct drm_plane *plane;
+    struct drm_plane_state *state;
+    struct drm_atomic_state *atomic_state;
+    struct drm_crtc *crtc;
+    struct drm_crtc_state *crtc_state;
+    bool found = false;
+    int ret;
+
+    if (!drm || !plane_name)
+        return -EINVAL;
+
+    drm_modeset_lock_all(drm);
+
+    drm_for_each_plane(plane, drm) {
+        if (!strncmp(plane->name, plane_name, strlen(plane->name))) {
+            found = true;
+            break;
+        }
+    }
+
+    if (!found) {
+        DRM_ERROR("Plane not found: %s\n", plane_name);
+        ret = -ENOENT;
+        goto unlock;
+    }
+
+    if (!plane->rotation_property) {
+        DRM_ERROR("Plane %s does not support rotation\n", plane_name);
+        ret = -ENOTSUPP;
+        goto unlock;
+    }
+
+    if (!(rotation & DRM_MODE_ROTATE_MASK)) {
+        DRM_ERROR("Invalid rotation value: 0x%08x\n", rotation);
+        ret = -EINVAL;
+        goto unlock;
+    }
+
+    state = plane->state;
+    if (!state || !state->crtc) {
+        DRM_ERROR("Plane %s has no CRTC assigned\n", plane_name);
+        ret = -ENODATA;
+        goto unlock;
+    }
+
+    crtc = state->crtc;
+
+    atomic_state = drm_atomic_state_alloc(drm);
+    if (!atomic_state) {
+        DRM_ERROR("Failed to allocate atomic state\n");
+        ret = -ENOMEM;
+        goto unlock;
+    }
+
+    atomic_state->acquire_ctx = drm->mode_config.acquire_ctx;
+    crtc_state = drm_atomic_get_crtc_state(atomic_state, crtc);
+    if (IS_ERR(crtc_state)) {
+        ret = PTR_ERR(crtc_state);
+        DRM_ERROR("Failed to get CRTC state: %d\n", ret);
+        goto retry_state;
+    }
+
+    state = drm_atomic_get_plane_state(atomic_state, plane);
+    if (IS_ERR(state)) {
+        ret = PTR_ERR(state);
+        DRM_ERROR("Failed to get plane state: %d\n", ret);
+        goto retry_state;
+    }
+
+    state->rotation = rotation;
+    crtc_state->active = true;
+
+    ret = drm_atomic_commit(atomic_state);
+    if (ret) {
+        DRM_ERROR("Atomic commit failed: %d\n", ret);
+        goto retry_state;
+    }
+
+    DRM_INFO("Plane %s rotation set to 0x%08x\n", plane_name, rotation);
+
+retry_state:
+    drm_atomic_state_put(atomic_state);
+
+unlock:
+    drm_modeset_unlock_all(drm);
+    return ret;
+}
+
+static ssize_t drm_modeset_rotation_write(struct file *file,
+                       const char __user *ubuf,
+                       size_t len, loff_t *offp)
+{
+    struct seq_file *m = file->private_data;
+    struct drm_device *drm = m->private;
+    char buf[128] = {0};
+    char plane_name[64] = {0};
+    uint32_t rotation = 0;
+    int ret;
+
+    if (len > sizeof(buf) - 1)
+        return -EINVAL;
+
+    if (copy_from_user(buf, ubuf, len))
+        return -EFAULT;
+
+    buf[len] = '\0';
+
+    /* Parse format: plane_name rotation
+     * Examples:
+     *   plane-0 90      - rotate 90 degrees
+     *   plane-1 180     - rotate 180 degrees
+     *   plane-0 270     - rotate 270 degrees
+     *   plane-0 0       - no rotation
+     *   plane-0 90+reflect-x  - rotate 90 + horizontal flip
+     *   plane-0 90+reflect-y  - rotate 90 + vertical flip
+     */
+    ret = sscanf(buf, "%63s %d", plane_name, (int *)&rotation);
+    if (ret != 2) {
+        DRM_ERROR("Usage: echo 'plane_name rotation' > rotation\n");
+        DRM_ERROR("  rotation: 0, 90, 180, 270\n");
+        DRM_ERROR("  Example: echo 'plane0 90' > rotation\n");
+        return -EINVAL;
+    }
+
+    /* Parse rotation value */
+    if (strstr(buf, "90+reflect-x") || strstr(buf, "90+reflect-x"))
+        rotation = DRM_MODE_ROTATE_90 | DRM_MODE_REFLECT_X;
+    else if (strstr(buf, "90+reflect-y"))
+        rotation = DRM_MODE_ROTATE_90 | DRM_MODE_REFLECT_Y;
+    else if (strstr(buf, "180+reflect-x"))
+        rotation = DRM_MODE_ROTATE_180 | DRM_MODE_REFLECT_X;
+    else if (strstr(buf, "180+reflect-y"))
+        rotation = DRM_MODE_ROTATE_180 | DRM_MODE_REFLECT_Y;
+    else if (strstr(buf, "270+reflect-x"))
+        rotation = DRM_MODE_ROTATE_270 | DRM_MODE_REFLECT_X;
+    else if (strstr(buf, "270+reflect-y"))
+        rotation = DRM_MODE_ROTATE_270 | DRM_MODE_REFLECT_Y;
+    else if (strstr(buf, "reflect-x"))
+        rotation = DRM_MODE_ROTATE_0 | DRM_MODE_REFLECT_X;
+    else if (strstr(buf, "reflect-y"))
+        rotation = DRM_MODE_ROTATE_0 | DRM_MODE_REFLECT_Y;
+    else {
+        switch (rotation) {
+        case 0:
+            rotation = DRM_MODE_ROTATE_0;
+            break;
+        case 90:
+            rotation = DRM_MODE_ROTATE_90;
+            break;
+        case 180:
+            rotation = DRM_MODE_ROTATE_180;
+            break;
+        case 270:
+            rotation = DRM_MODE_ROTATE_270;
+            break;
+        default:
+            DRM_ERROR("Invalid rotation: %d (use 0, 90, 180, 270)\n", rotation);
+            return -EINVAL;
+        }
+    }
+
+    ret = drm_modeset_set_plane_rotation(drm, plane_name, rotation);
+    if (ret)
+        return ret;
+
+    return len;
+}
+
+static int drm_modeset_rotation_show(struct seq_file *m, void *data)
+{
+    struct drm_device *drm = m->private;
+    struct drm_plane *plane;
+
+    if (!drm)
+        return -ENODEV;
+
+    seq_printf(m, "===========================================\n");
+    seq_printf(m, "Plane Rotation Control\n");
+    seq_printf(m, "===========================================\n");
+    seq_printf(m, "\nUsage:\n");
+    seq_printf(m, "  echo 'plane_name rotation' > rotation\n");
+    seq_printf(m, "\nExamples:\n");
+    seq_printf(m, "  echo 'plane0 0' > rotation      # No rotation\n");
+    seq_printf(m, "  echo 'plane0 90' > rotation     # Rotate 90 degrees\n");
+    seq_printf(m, "  echo 'plane0 180' > rotation    # Rotate 180 degrees\n");
+    seq_printf(m, "  echo 'plane0 270' > rotation    # Rotate 270 degrees\n");
+    seq_printf(m, "  echo 'plane0 reflect-x' > rotation  # Horizontal flip\n");
+    seq_printf(m, "  echo 'plane0 reflect-y' > rotation  # Vertical flip\n");
+    seq_printf(m, "  echo 'plane0 90+reflect-x' > rotation # Rotate 90 + H flip\n");
+    seq_printf(m, "\nCurrent plane rotation:\n");
+
+    drm_modeset_lock_all(drm);
+    drm_for_each_plane(plane, drm) {
+        if (plane->state && plane->rotation_property) {
+            drm_modeset_print_plane_info(m, plane);
+        }
+    }
+    drm_modeset_unlock_all(drm);
+
+    return 0;
+}
+
+static int drm_modeset_rotation_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, drm_modeset_rotation_show, inode->i_private);
+}
+
+static const struct file_operations drm_modeset_rotation_fops = {
+    .owner = THIS_MODULE,
+    .open    = drm_modeset_rotation_open,
+    .read    = seq_read,
+    .write   = drm_modeset_rotation_write,
+    .llseek   = seq_lseek,
+    .release = single_release,
+};
+
 static int drm_modeset_debug_open(struct inode *inode, struct file *file)
 {
     uint8_t i;
     const char *name = file->f_path.dentry->d_name.name;
 
-    for (i = 0; i < ARRAY_SIZE(modset_debug_entry); i++) {
-        if (!strcmp(name, modset_debug_entry[i].name))
-            return single_open(file, modset_debug_entry[i].show_func, inode->i_private);
+    for (i = 0; i < ARRAY_SIZE(modeset_debug_entry); i++) {
+        if (!strcmp(name, modeset_debug_entry[i].name))
+            return single_open(file, modeset_debug_entry[i].show_func, inode->i_private);
     }
 
     return -EINVAL;
@@ -548,10 +827,12 @@ int drm_modeset_debugfs_init(struct drm_device *drm, struct dentry *root)
         return -ENODEV;
     }
 
-    for (i = 0; i < ARRAY_SIZE(modset_debug_entry); i++) {
-        debugfs_create_file(modset_debug_entry[i].name, 0444, root, drm, &drm_modeset_fops);
-        printk("start create file %s\n", modset_debug_entry[i].name);
+    for (i = 0; i < ARRAY_SIZE(modeset_debug_entry); i++) {
+        debugfs_create_file(modeset_debug_entry[i].name, 0444, root, drm, &drm_modeset_fops);
     }
+
+    /* Create rotation control file */
+    debugfs_create_file("rotation", 0644, root, drm, &drm_modeset_rotation_fops);
 
     return 0;
 }
