@@ -29,13 +29,10 @@
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_debugfs.h>
 
-typedef int (*seq_show_t)(struct seq_file *, void *);
-
 struct drm_modeset_debugfs_entry {
     const char *name;
-    seq_show_t show_func;
+    int (*show_func)(struct seq_file *, void *);
 };
-
 
 static const char *drm_connector_status_name(enum drm_connector_status status)
 {
@@ -202,9 +199,9 @@ static void drm_modeset_print_connector_info(struct seq_file *m,
     seq_printf(m, "  dpms: %d\n", connector->dpms);
     seq_printf(m, " ");
 
-    seq_printf(m, "  edid: %p\n", connector->eld);
     if (connector->eld) {
         seq_printf(m, "  (EDID available)\n");
+        seq_printf(m, "  edid: %p\n", connector->eld);
     }
 
     seq_printf(m, "  modes:\n");
@@ -232,8 +229,6 @@ static struct drm_crtc *drm_modeset_encoder_get_crtc(struct drm_encoder *encoder
     bool uses_atomic = false;
     struct drm_connector_list_iter conn_iter;
 
-    /* For atomic drivers only state objects are synchronously updated and
-     * protected by modeset locks, so check those first. */
     drm_connector_list_iter_begin(dev, &conn_iter);
     drm_for_each_connector_iter(connector, &conn_iter) {
         if (!connector->state)
@@ -249,7 +244,6 @@ static struct drm_crtc *drm_modeset_encoder_get_crtc(struct drm_encoder *encoder
     }
     drm_connector_list_iter_end(&conn_iter);
 
-    /* Don't return stale data (e.g. pending async disable). */
     if (uses_atomic)
         return NULL;
 
@@ -324,9 +318,6 @@ static void drm_modeset_print_device_info(struct seq_file *m, struct drm_device 
     seq_printf(m, "  connector: %d\n", drm->mode_config.num_connector);
     seq_printf(m, "  encoder: %d\n", drm->mode_config.num_encoder);
     seq_printf(m, "  fb: %d\n", drm->mode_config.num_fb);
-    seq_printf(m, "  fb config: %p\n", &drm->mode_config);
-
-    seq_printf(m, "\nFeature flags:\n");
 
     seq_printf(m, "\n");
 }
@@ -557,19 +548,10 @@ int drm_modeset_debugfs_init(struct drm_device *drm, struct dentry *root)
         return -ENODEV;
     }
 
-    root = debugfs_create_dir("drm_modeset", drm->primary->debugfs_root);
-    if (IS_ERR(root)) {
-        DRM_ERROR("Failed to create drm_modeset debugfs dir: %ld\n", PTR_ERR(root));
-        return PTR_ERR(root);
-    }
-
-
     for (i = 0; i < ARRAY_SIZE(modset_debug_entry); i++) {
         debugfs_create_file(modset_debug_entry[i].name, 0444, root, drm, &drm_modeset_fops);
+        printk("start create file %s\n", modset_debug_entry[i].name);
     }
-
-    DRM_INFO("DRM modeset debugfs initialized at /sys/kernel/debug/dri/%d/drm_modeset\n",
-         drm->primary->index);
 
     return 0;
 }

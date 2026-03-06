@@ -55,4 +55,6 @@ void drm_direct_show_free_buffer(struct drm_device *drm,
 int drm_direct_show_commit(struct drm_device *drm,
                     struct drm_direct_show_commit_info *commit_info);
 
+int drm_modeset_debugfs_init(struct drm_device *drm, struct dentry *root);
+
 #endif

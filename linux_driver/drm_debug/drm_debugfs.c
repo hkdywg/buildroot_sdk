@@ -339,6 +339,7 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
     struct dentry *drm_debug_root;
     struct dentry *ent;
     struct drm_crtc *crtc;
+    int ret;
 
     crtc = drm_crtc_from_index(drm, 0);
     if (!crtc) {
@@ -367,6 +368,13 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
     ent = debugfs_create_file("display", 0444, drm_debug_root, &display_info, &drm_debug_display_fops);
     if (!ent) {
         DRM_ERROR("create drm debug display err\n");
+        debugfs_remove_recursive(drm_debug_root);
+        return -ENOMEM;
+    }
+
+    ret = drm_modeset_debugfs_init(drm, drm_debug_root);
+    if (ret) {
+        DRM_ERROR("create drm debug modeset endpoint err\n");
         debugfs_remove_recursive(drm_debug_root);
         return -ENOMEM;
     }
