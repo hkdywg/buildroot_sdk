@@ -82,9 +82,7 @@ static int drm_debug_fbdev_create(struct drm_fb_helper *helper,
     struct drm_device *dev = helper->dev;
     struct drm_framebuffer *fb;
     unsigned int bytes_per_pixel;
-    unsigned long offset;
     struct fb_info *fbi;
-    size_t size;
     int ret;
 
     bytes_per_pixel = DIV_ROUND_UP(sizes->surface_bpp, 8);
@@ -94,11 +92,6 @@ static int drm_debug_fbdev_create(struct drm_fb_helper *helper,
     mode_cmd.pitches[0] = sizes->surface_width * bytes_per_pixel;
     mode_cmd.pixel_format = drm_mode_legacy_fb_format(sizes->surface_bpp,
                                                 sizes->surface_depth);
-
-    size = mode_cmd.pitches[0] * mode_cmd.height;
-    /*
-     * gem 待完善
-     */
 
     fbi = drm_fb_helper_alloc_fbi(helper);
     if (IS_ERR(fbi)) {
@@ -115,12 +108,11 @@ static int drm_debug_fbdev_create(struct drm_fb_helper *helper,
     }
 
     fbi->fbops = &drm_debug_fbdev_ops; 
+    fbi->screen_size  = fb->height * fb->pitches[0];
+    fbi->fix.smem_len = fbi->screen_size;
 
     fb = helper->fb;
     drm_fb_helper_fill_info(fbi, helper, sizes);
-
-    offset = fbi->var.xoffset * bytes_per_pixel;
-    offset += fbi->var.yoffset * fb->pitches[0];
 
     dev->mode_config.fb_base = 0;
 
