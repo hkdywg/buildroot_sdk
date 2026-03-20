@@ -212,7 +212,6 @@ static int drm_debug_free_buffers(struct drm_debug_display *drm_debug)
 
     for (i = 0; i < USER_BUFFER_NUM; i++) {
         if (drm_debug->drm_buffer[i]) {
-            drm_direct_show_free_buffer(drm_debug->dev, drm_debug->drm_buffer[i]);
             kfree(drm_debug->drm_buffer[i]);
             drm_debug->drm_buffer[i] = NULL;
         }
@@ -339,7 +338,6 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
     struct dentry *drm_debug_root;
     struct dentry *ent;
     struct drm_crtc *crtc;
-    int ret;
 
     crtc = drm_crtc_from_index(drm, 0);
     if (!crtc) {
@@ -368,13 +366,6 @@ static int drm_debug_add_file(struct drm_device *drm, struct dentry *root)
     ent = debugfs_create_file("display", 0444, drm_debug_root, &display_info, &drm_debug_display_fops);
     if (!ent) {
         DRM_ERROR("create drm debug display err\n");
-        debugfs_remove_recursive(drm_debug_root);
-        return -ENOMEM;
-    }
-
-    ret = drm_modeset_debugfs_init(drm, drm_debug_root);
-    if (ret) {
-        DRM_ERROR("create drm debug modeset endpoint err\n");
         debugfs_remove_recursive(drm_debug_root);
         return -ENOMEM;
     }
@@ -415,7 +406,7 @@ static struct drm_device *find_exist_drm_device(const char *card_name)
     return drm;
 }
 
-static int drm_debug_probe(struct platform_device *pdev)
+static int drm_debug_probe(struct platform_device *pdata)
 {
     struct drm_device *drm;
     int ret;
@@ -440,13 +431,13 @@ static int drm_debug_probe(struct platform_device *pdev)
         return ret;
     }
 
-    platform_set_drvdata(pdev, drm);
+    platform_set_drvdata(pdata, drm);
     return 0;
 }
 
-static int drm_debug_remove(struct platform_device *pdev)
+static int drm_debug_remove(struct platform_device *pdata)
 {
-    struct drm_device *drm = platform_get_drvdata(pdev);
+    struct drm_device *drm = platform_get_drvdata(pdata);
 
     cancel_work_sync(&display_info.dump_work);
     drm_debug_free_buffers(&display_info);
