@@ -57,4 +57,6 @@ int drm_direct_show_commit(struct drm_device *drm,
 
 int drm_modeset_debugfs_init(struct drm_device *drm, struct dentry *root);
 
+struct drm_gem_object *drm_debug_gem_obj_create(struct drm_device *drm, size_t size);
+
 #endif

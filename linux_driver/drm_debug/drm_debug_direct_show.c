@@ -159,7 +159,7 @@ static int drm_direct_show_calc_layout(struct drm_direct_show_buffer *buffer)
     return 0;
 }
 
-static inline struct drm_gem_object *drm_direct_show_dma_create(struct drm_device *drm,
+struct drm_gem_object *drm_debug_gem_obj_create(struct drm_device *drm,
                                                         size_t size)
 {
     struct drm_gem_cma_object *cma_obj;
@@ -196,7 +196,7 @@ int drm_direct_show_alloc_buffer(struct drm_device *drm,
     if (ret)
         return ret;
 
-    obj = drm_direct_show_dma_create(drm, buffer->size);
+    obj = drm_debug_gem_obj_create(drm, buffer->size);
     if (IS_ERR(obj))
         return PTR_ERR(obj);
 

@@ -15,6 +15,8 @@
 #include <drm/drm_gem.h>
 #include <drm/drm_modeset_helper.h>
 
+#include "drm_debug.h"
+
 struct drm_debug_fbdev {
     struct drm_gem_object *fbdev_bo;
     struct drm_fb_helper *fbdev_helper;
@@ -29,12 +31,20 @@ static struct drm_framebuffer *drm_debug_framebuffer_init(struct drm_device *dev
                         struct drm_mode_fb_cmd2 *mode_cmd)
 {
     struct drm_framebuffer *fb;
+    struct drm_gem_object *obj;
+    size_t size;
     int ret;
 
     fb = kzalloc(sizeof(*fb), GFP_KERNEL);
     if (!fb)
         return ERR_PTR(-ENOMEM);
 
+    size = mode_cmd->pitches[0] * mode_cmd->height;
+    obj = drm_debug_gem_obj_create(dev, size);
+    if (IS_ERR(obj))
+        return NULL;
+
+    fb->obj[0] = obj;
     drm_helper_mode_fill_fb_struct(dev, fb, mode_cmd);
 
     ret = drm_framebuffer_init(dev, fb, &drm_debug_fb_funcs);
@@ -65,10 +75,9 @@ static const struct fb_ops drm_debug_fbdev_ops = {
     .fb_imageblit = drm_fb_helper_cfb_imageblit,
 };
 
-static int drm_fbdev_create(struct drm_fb_helper *helper,
+static int drm_debug_fbdev_create(struct drm_fb_helper *helper,
                         struct drm_fb_helper_surface_size *sizes)
 {
-    struct drm_debug_fbdev *debug_fbdev = helper->dev->dev_private;
     struct drm_mode_fb_cmd2 mode_cmd = { 0 };
     struct drm_device *dev = helper->dev;
     struct drm_framebuffer *fb;
@@ -122,7 +131,7 @@ out:
 }
 
 static const struct drm_fb_helper_funcs drm_fb_helper_funcs = {
-    .fb_probe = drm_fbdev_create,
+    .fb_probe = drm_debug_fbdev_create,
 };
 
 int drm_debug_fbdev_init(struct drm_device *dev)
