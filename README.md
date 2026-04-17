@@ -3,8 +3,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-R%20Car%20E3-blue?style=for-the-badge&logo=linux" alt="R-Car E3">
   <img src="https://img.shields.io/badge/Architecture-ARM64-red?style=for-the-badge" alt="ARM64">
-  <img src="https://img.shields.io/badge/BuildSystem-Kbuild-green?style=for-the-badge" alt="Kbuild">
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License">
+  <img src="https://img.shields.io/badge/BuildSystem-Makefile-green?style=for-the-badge" alt="Makefile">
   <img src="https://img.shields.io/badge/Buildroot-2021.05-orange?style=for-the-badge" alt="Buildroot">
 </p>
 
