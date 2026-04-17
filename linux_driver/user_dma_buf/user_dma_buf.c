@@ -30,7 +30,7 @@
 #include <linux/uaccess.h>
 #include <linux/property.h>
 #include <linux/dma-mapping.h>
-#include <linux/dma-noncoherent.h>
+//#include <linux/dma-noncoherent.h>
 
 #include <linux/of_device.h>
 #include <linux/of_reserved_mem.h>
@@ -679,13 +679,9 @@ static int udmabuf_export_end_cpu(struct dma_buf *dma_buf, enum dma_data_directi
     return 0;
 }
 
-static void *udmabuf_export_kmap(struct dma_buf *dma_buf, unsigned long page)
-{
-    return NULL;
-}
-
 static const struct dma_buf_ops udmabuf_export_ops = {
-    .map                = udmabuf_export_kmap,
+    // not support in kernel-5.10
+//    .map                = udmabuf_export_kmap,
     .map_dma_buf        = udmabuf_export_dma_buf_map,
     .unmap_dma_buf      = udmabuf_export_dma_buf_unmap,
     .release            = udmabuf_export_release,
@@ -1556,11 +1552,15 @@ typedef struct {
 } udmabuf_static_device_param;
 
 extern struct bus_type amba_bustype;
+#ifdef CONFIG_PCI
 extern struct bus_type pci_bus_type;
+#endif
 
 static struct bus_type *udmabuf_available_bus_type_list[] = {
     &amba_bustype,
+#ifdef CONFIG_PCI
     &pci_bus_type,
+#endif
     NULL
 };
 
